@@ -1,0 +1,31 @@
+{
+  "specSource": ".tmp-noauth-openapi.json",
+  "apiName": "no-auth-api",
+  "outputDir": ".tmp-noauth-server",
+  "optimized": false,
+  "ir": {
+    "apiName": "NoAuth API",
+    "apiDescription": "Generated MCP server from OpenAPI specification.",
+    "baseUrl": "https://example.com/api",
+    "auth": {
+      "type": "none",
+      "envVarName": "NO_AUTH",
+      "description": "No authentication scheme detected.",
+      "required": false,
+      "hasSecuritySchemes": false
+    },
+    "tools": [
+      {
+        "name": "get_status",
+        "description": "Get status",
+        "method": "GET",
+        "path": "/status",
+        "parameters": [],
+        "responseDescription": "OK",
+        "tags": [],
+        "originalOperationId": "getStatus"
+      }
+    ],
+    "rawEndpointCount": 1
+  }
+}

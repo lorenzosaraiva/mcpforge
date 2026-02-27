@@ -1,0 +1,19 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "ReqAuth API", "version": "1.0.0"},
+  "servers": [{"url": "https://example.com/api"}],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type": "http", "scheme": "bearer"}
+    }
+  },
+  "security": [{"bearerAuth": []}],
+  "paths": {
+    "/items": {
+      "get": {
+        "operationId": "listItems",
+        "responses": {"200": {"description": "OK"}}
+      }
+    }
+  }
+}

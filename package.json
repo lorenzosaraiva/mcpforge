@@ -1,0 +1,32 @@
+{
+  "name": "mcpforge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Generate production-ready MCP servers from OpenAPI specs.",
+  "author": "Lorenzo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/mcpforge.git"
+  },
+  "keywords": [
+    "mcp",
+    "openapi",
+    "ai",
+    "agent",
+    "claude",
+    "cursor",
+    "model-context-protocol"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @mcpforge/core && npm run build -w mcpforge",
+    "dev": "tsx packages/cli/src/index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}

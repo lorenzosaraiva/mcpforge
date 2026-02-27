@@ -1,0 +1,34 @@
+{
+  "name": "mcpforge",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcpforge": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup --config tsup.config.ts && node ./scripts/copy-templates.mjs",
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.0",
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@clack/prompts": "^0.11.0",
+    "commander": "^14.0.1",
+    "handlebars": "^4.7.8",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}

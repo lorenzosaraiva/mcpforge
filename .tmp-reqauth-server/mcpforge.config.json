@@ -1,0 +1,33 @@
+{
+  "specSource": ".tmp-reqauth-openapi.json",
+  "apiName": "req-auth-api",
+  "outputDir": ".tmp-reqauth-server",
+  "optimized": false,
+  "ir": {
+    "apiName": "ReqAuth API",
+    "apiDescription": "Generated MCP server from OpenAPI specification.",
+    "baseUrl": "https://example.com/api",
+    "auth": {
+      "type": "bearer",
+      "headerName": "Authorization",
+      "scheme": "Bearer",
+      "envVarName": "ACCESS_TOKEN",
+      "description": "Authentication scheme: bearerAuth",
+      "required": true,
+      "hasSecuritySchemes": true
+    },
+    "tools": [
+      {
+        "name": "list_items",
+        "description": "GET /items",
+        "method": "GET",
+        "path": "/items",
+        "parameters": [],
+        "responseDescription": "OK",
+        "tags": [],
+        "originalOperationId": "listItems"
+      }
+    ],
+    "rawEndpointCount": 1
+  }
+}

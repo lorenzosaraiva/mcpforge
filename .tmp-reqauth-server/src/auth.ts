@@ -1,0 +1,79 @@
+export interface RuntimeAuthConfig {
+  type: "none" | "api-key" | "bearer" | "oauth2" | "basic";
+  headerName?: string;
+  scheme?: string;
+  envVarName: string;
+  description?: string;
+  required?: boolean;
+  hasSecuritySchemes?: boolean;
+}
+
+export const AUTH_CONFIG: RuntimeAuthConfig = {
+  "type": "bearer",
+  "headerName": "Authorization",
+  "scheme": "Bearer",
+  "envVarName": "ACCESS_TOKEN",
+  "description": "Authentication scheme: bearerAuth",
+  "required": true,
+  "hasSecuritySchemes": true
+};
+
+function readEnv(envName: string): string | undefined {
+  const value = process.env[envName];
+  if (!value || !value.trim()) {
+    return undefined;
+  }
+  return value.trim();
+}
+
+export interface AuthHeaderResolution {
+  headers: Record<string, string>;
+  startupWarning?: string;
+}
+
+export function getAuthHeaders(
+  authConfig: RuntimeAuthConfig,
+): AuthHeaderResolution {
+  if (authConfig.type === "none") {
+    return { headers: {} };
+  }
+
+  const envValue = readEnv(authConfig.envVarName);
+  if (!envValue) {
+    return {
+      headers: {},
+      startupWarning:
+        authConfig.required === true
+          ? `WARNING: ${authConfig.envVarName} not set, requests may fail`
+          : undefined,
+    };
+  }
+
+  if (authConfig.type === "api-key") {
+    const headerName = authConfig.headerName ?? "X-API-Key";
+    return {
+      headers: { [headerName]: envValue },
+    };
+  }
+
+  if (authConfig.type === "basic") {
+    const headerName = authConfig.headerName ?? "Authorization";
+    const encoded =
+      envValue.startsWith("Basic ")
+        ? envValue
+        : `Basic ${Buffer.from(envValue).toString("base64")}`;
+    return {
+      headers: { [headerName]: encoded },
+    };
+  }
+
+  if (authConfig.type === "bearer" || authConfig.type === "oauth2") {
+    const headerName = authConfig.headerName ?? "Authorization";
+    const scheme = authConfig.scheme ?? "Bearer";
+    return {
+      headers: { [headerName]: `${scheme} ${envValue}` },
+    };
+  }
+
+  return { headers: {} };
+}

@@ -1,0 +1,756 @@
+{
+  "specSource": "https://petstore3.swagger.io/api/v3/openapi.json",
+  "apiName": "swagger-petstore-open-api-3-0",
+  "outputDir": "petstore-from-pack",
+  "optimized": false,
+  "ir": {
+    "apiName": "Swagger Petstore - OpenAPI 3.0",
+    "apiDescription": "This is a sample Pet Store Server based on the OpenAPI 3.0 specification. You can find out more about Swagger at [https://swagger.io](https://swagger.io). In the third iteration of the pet store, we've switched to the design first approach! You can now help us improve the API whether it's by making changes to the definition itself or to the code. That way, with time, we can improve the API in general, and expose...",
+    "baseUrl": "https://petstore3.swagger.io/api/v3",
+    "auth": {
+      "type": "oauth2",
+      "headerName": "Authorization",
+      "scheme": "Bearer",
+      "envVarName": "ACCESS_TOKEN",
+      "description": "Authentication scheme: petstore_auth",
+      "required": false,
+      "hasSecuritySchemes": true
+    },
+    "tools": [
+      {
+        "name": "update_pet",
+        "description": "Update an existing pet. Update an existing pet by Id.",
+        "method": "PUT",
+        "path": "/pet",
+        "parameters": [],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "required": [
+              "name",
+              "photoUrls"
+            ],
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64",
+                "example": 10
+              },
+              "name": {
+                "type": "string",
+                "example": "doggie"
+              },
+              "category": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Dogs"
+                  }
+                },
+                "xml": {
+                  "name": "category"
+                }
+              },
+              "photoUrls": {
+                "type": "array",
+                "xml": {
+                  "wrapped": true
+                },
+                "items": {
+                  "type": "string",
+                  "xml": {
+                    "name": "photoUrl"
+                  }
+                }
+              },
+              "tags": {
+                "type": "array",
+                "xml": {
+                  "wrapped": true
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "tag"
+                  }
+                }
+              },
+              "status": {
+                "type": "string",
+                "description": "pet status in the store",
+                "enum": [
+                  "available",
+                  "pending",
+                  "sold"
+                ]
+              }
+            },
+            "xml": {
+              "name": "pet"
+            }
+          },
+          "required": true,
+          "description": "Update an existent pet in the store"
+        },
+        "responseDescription": "Successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "updatePet"
+      },
+      {
+        "name": "add_pet",
+        "description": "Add a new pet to the store. Add a new pet to the store.",
+        "method": "POST",
+        "path": "/pet",
+        "parameters": [],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "required": [
+              "name",
+              "photoUrls"
+            ],
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64",
+                "example": 10
+              },
+              "name": {
+                "type": "string",
+                "example": "doggie"
+              },
+              "category": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Dogs"
+                  }
+                },
+                "xml": {
+                  "name": "category"
+                }
+              },
+              "photoUrls": {
+                "type": "array",
+                "xml": {
+                  "wrapped": true
+                },
+                "items": {
+                  "type": "string",
+                  "xml": {
+                    "name": "photoUrl"
+                  }
+                }
+              },
+              "tags": {
+                "type": "array",
+                "xml": {
+                  "wrapped": true
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "xml": {
+                    "name": "tag"
+                  }
+                }
+              },
+              "status": {
+                "type": "string",
+                "description": "pet status in the store",
+                "enum": [
+                  "available",
+                  "pending",
+                  "sold"
+                ]
+              }
+            },
+            "xml": {
+              "name": "pet"
+            }
+          },
+          "required": true,
+          "description": "Create a new pet in the store"
+        },
+        "responseDescription": "Successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "addPet"
+      },
+      {
+        "name": "find_pets_by_status",
+        "description": "Finds Pets by status. Multiple status values can be provided with comma separated strings.",
+        "method": "GET",
+        "path": "/pet/findByStatus",
+        "parameters": [
+          {
+            "name": "status",
+            "description": "Status values that need to be considered for filter",
+            "type": "string",
+            "required": true,
+            "location": "query",
+            "default": "available",
+            "enum": [
+              "available",
+              "pending",
+              "sold"
+            ]
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "findPetsByStatus"
+      },
+      {
+        "name": "find_pets_by_tags",
+        "description": "Finds Pets by tags. Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing.",
+        "method": "GET",
+        "path": "/pet/findByTags",
+        "parameters": [
+          {
+            "name": "tags",
+            "description": "Tags to filter by",
+            "type": "array",
+            "required": true,
+            "location": "query"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "findPetsByTags"
+      },
+      {
+        "name": "get_pet_by_id",
+        "description": "Find pet by ID. Returns a single pet.",
+        "method": "GET",
+        "path": "/pet/{petId}",
+        "parameters": [
+          {
+            "name": "petId",
+            "description": "ID of pet to return",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "getPetById"
+      },
+      {
+        "name": "update_pet_with_form",
+        "description": "Updates a pet in the store with form data. Updates a pet resource based on the form data.",
+        "method": "POST",
+        "path": "/pet/{petId}",
+        "parameters": [
+          {
+            "name": "petId",
+            "description": "ID of pet that needs to be updated",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          },
+          {
+            "name": "name",
+            "description": "Name of pet that needs to be updated",
+            "type": "string",
+            "required": false,
+            "location": "query"
+          },
+          {
+            "name": "status",
+            "description": "Status of pet that needs to be updated",
+            "type": "string",
+            "required": false,
+            "location": "query"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "updatePetWithForm"
+      },
+      {
+        "name": "delete_pet",
+        "description": "Deletes a pet. Delete a pet.",
+        "method": "DELETE",
+        "path": "/pet/{petId}",
+        "parameters": [
+          {
+            "name": "api_key",
+            "description": "header parameter \"api_key\"",
+            "type": "string",
+            "required": false,
+            "location": "header"
+          },
+          {
+            "name": "petId",
+            "description": "Pet id to delete",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "Pet deleted",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "deletePet"
+      },
+      {
+        "name": "upload_file",
+        "description": "Uploads an image. Upload image of the pet.",
+        "method": "POST",
+        "path": "/pet/{petId}/uploadImage",
+        "parameters": [
+          {
+            "name": "petId",
+            "description": "ID of pet to update",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          },
+          {
+            "name": "additionalMetadata",
+            "description": "Additional Metadata",
+            "type": "string",
+            "required": false,
+            "location": "query"
+          }
+        ],
+        "requestBody": {
+          "contentType": "application/octet-stream",
+          "schema": {
+            "type": "string",
+            "format": "binary"
+          },
+          "required": false
+        },
+        "responseDescription": "successful operation",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "uploadFile"
+      },
+      {
+        "name": "get_inventory",
+        "description": "Returns pet inventories by status. Returns a map of status codes to quantities.",
+        "method": "GET",
+        "path": "/store/inventory",
+        "parameters": [],
+        "responseDescription": "successful operation",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "getInventory"
+      },
+      {
+        "name": "place_order",
+        "description": "Place an order for a pet. Place a new order in the store.",
+        "method": "POST",
+        "path": "/store/order",
+        "parameters": [],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64",
+                "example": 10
+              },
+              "petId": {
+                "type": "integer",
+                "format": "int64",
+                "example": 198772
+              },
+              "quantity": {
+                "type": "integer",
+                "format": "int32",
+                "example": 7
+              },
+              "shipDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "type": "string",
+                "description": "Order Status",
+                "example": "approved",
+                "enum": [
+                  "placed",
+                  "approved",
+                  "delivered"
+                ]
+              },
+              "complete": {
+                "type": "boolean"
+              }
+            },
+            "xml": {
+              "name": "order"
+            }
+          },
+          "required": false
+        },
+        "responseDescription": "successful operation",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "placeOrder"
+      },
+      {
+        "name": "get_order_by_id",
+        "description": "Find purchase order by ID. For valid response try integer IDs with value <= 5 or > 10. Other values will generate exceptions.",
+        "method": "GET",
+        "path": "/store/order/{orderId}",
+        "parameters": [
+          {
+            "name": "orderId",
+            "description": "ID of order that needs to be fetched",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "getOrderById"
+      },
+      {
+        "name": "delete_order",
+        "description": "Delete purchase order by identifier. For valid response try integer IDs with value < 1000. Anything above 1000 or non-integers will generate API errors.",
+        "method": "DELETE",
+        "path": "/store/order/{orderId}",
+        "parameters": [
+          {
+            "name": "orderId",
+            "description": "ID of the order that needs to be deleted",
+            "type": "integer",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "order deleted",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "deleteOrder"
+      },
+      {
+        "name": "create_user",
+        "description": "Create user. This can only be done by the logged in user.",
+        "method": "POST",
+        "path": "/user",
+        "parameters": [],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64",
+                "example": 10
+              },
+              "username": {
+                "type": "string",
+                "example": "theUser"
+              },
+              "firstName": {
+                "type": "string",
+                "example": "John"
+              },
+              "lastName": {
+                "type": "string",
+                "example": "James"
+              },
+              "email": {
+                "type": "string",
+                "example": "john@email.com"
+              },
+              "password": {
+                "type": "string",
+                "example": "12345"
+              },
+              "phone": {
+                "type": "string",
+                "example": "12345"
+              },
+              "userStatus": {
+                "type": "integer",
+                "description": "User Status",
+                "format": "int32",
+                "example": 1
+              }
+            },
+            "xml": {
+              "name": "user"
+            }
+          },
+          "required": false,
+          "description": "Created user object"
+        },
+        "responseDescription": "successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "createUser"
+      },
+      {
+        "name": "create_users_with_list_input",
+        "description": "Creates list of users with given input array. Creates list of users with given input array.",
+        "method": "POST",
+        "path": "/user/createWithList",
+        "parameters": [],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64",
+                  "example": 10
+                },
+                "username": {
+                  "type": "string",
+                  "example": "theUser"
+                },
+                "firstName": {
+                  "type": "string",
+                  "example": "John"
+                },
+                "lastName": {
+                  "type": "string",
+                  "example": "James"
+                },
+                "email": {
+                  "type": "string",
+                  "example": "john@email.com"
+                },
+                "password": {
+                  "type": "string",
+                  "example": "12345"
+                },
+                "phone": {
+                  "type": "string",
+                  "example": "12345"
+                },
+                "userStatus": {
+                  "type": "integer",
+                  "description": "User Status",
+                  "format": "int32",
+                  "example": 1
+                }
+              },
+              "xml": {
+                "name": "user"
+              }
+            }
+          },
+          "required": false
+        },
+        "responseDescription": "Successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "createUsersWithListInput"
+      },
+      {
+        "name": "login_user",
+        "description": "Logs user into the system. Log into the system.",
+        "method": "GET",
+        "path": "/user/login",
+        "parameters": [
+          {
+            "name": "username",
+            "description": "The user name for login",
+            "type": "string",
+            "required": false,
+            "location": "query"
+          },
+          {
+            "name": "password",
+            "description": "The password for login in clear text",
+            "type": "string",
+            "required": false,
+            "location": "query"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "loginUser"
+      },
+      {
+        "name": "logout_user",
+        "description": "Logs out current logged in user session. Log user out of the system.",
+        "method": "GET",
+        "path": "/user/logout",
+        "parameters": [],
+        "responseDescription": "successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "logoutUser"
+      },
+      {
+        "name": "get_user_by_name",
+        "description": "Get user by user name. Get user detail based on username.",
+        "method": "GET",
+        "path": "/user/{username}",
+        "parameters": [
+          {
+            "name": "username",
+            "description": "The name that needs to be fetched. Use user1 for testing",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "getUserByName"
+      },
+      {
+        "name": "update_user",
+        "description": "Update user resource. This can only be done by the logged in user.",
+        "method": "PUT",
+        "path": "/user/{username}",
+        "parameters": [
+          {
+            "name": "username",
+            "description": "name that need to be deleted",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "requestBody": {
+          "contentType": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64",
+                "example": 10
+              },
+              "username": {
+                "type": "string",
+                "example": "theUser"
+              },
+              "firstName": {
+                "type": "string",
+                "example": "John"
+              },
+              "lastName": {
+                "type": "string",
+                "example": "James"
+              },
+              "email": {
+                "type": "string",
+                "example": "john@email.com"
+              },
+              "password": {
+                "type": "string",
+                "example": "12345"
+              },
+              "phone": {
+                "type": "string",
+                "example": "12345"
+              },
+              "userStatus": {
+                "type": "integer",
+                "description": "User Status",
+                "format": "int32",
+                "example": 1
+              }
+            },
+            "xml": {
+              "name": "user"
+            }
+          },
+          "required": false,
+          "description": "Update an existent user in the store"
+        },
+        "responseDescription": "successful operation",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "updateUser"
+      },
+      {
+        "name": "delete_user",
+        "description": "Delete user resource. This can only be done by the logged in user.",
+        "method": "DELETE",
+        "path": "/user/{username}",
+        "parameters": [
+          {
+            "name": "username",
+            "description": "The name that needs to be deleted",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "User deleted",
+        "tags": [
+          "user"
+        ],
+        "originalOperationId": "deleteUser"
+      }
+    ],
+    "rawEndpointCount": 19
+  }
+}
