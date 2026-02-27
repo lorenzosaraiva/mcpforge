@@ -2,6 +2,9 @@
 
 Generate production-ready MCP servers from any OpenAPI spec in seconds.
 
+[![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <!-- demo gif here -->
 
 ## Quick Start
@@ -9,6 +12,9 @@ Generate production-ready MCP servers from any OpenAPI spec in seconds.
 ```bash
 npx mcpforge init https://api.example.com/openapi.json
 ```
+## Why MCPForge?
+
+Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI specs, but the output is rough — hundreds of tools with bad descriptions that overwhelm LLMs. MCPForge uses AI to curate endpoints into a smaller set of well-named, well-described tools that actually work well with Claude, Cursor, and other MCP clients. Think of it as the difference between dumping a raw API spec on an assistant vs. briefing them on the 20 tools they actually need.
 
 ## What It Does
 
