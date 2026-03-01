@@ -1,0 +1,1320 @@
+# Optimizer Report: GitHub REST API
+
+## API Summary
+- API name: GitHub v3 REST API
+- Total endpoints in spec: 1079
+- Notes: Optimization ran with large-API cap (200 endpoints sent to optimizer) and chunked execution.
+
+## Tools WITHOUT Optimization
+- Count: 1079
+
+- meta_root
+- security_advisories_list_global_advisories
+- security_advisories_get_global_advisory
+- apps_get_authenticated
+- apps_create_from_manifest
+- apps_get_webhook_config_for_app
+- apps_update_webhook_config_for_app
+- apps_list_webhook_deliveries
+- apps_get_webhook_delivery
+- apps_redeliver_webhook_delivery
+- apps_list_installation_requests_for_authenticated_app
+- apps_list_installations
+- apps_get_installation
+- apps_delete_installation
+- apps_create_installation_access_token
+- apps_suspend_installation
+- apps_unsuspend_installation
+- apps_delete_authorization
+- apps_check_token
+- apps_reset_token
+- apps_delete_token
+- apps_scope_token
+- apps_get_by_slug
+- classroom_get_an_assignment
+- classroom_list_accepted_assignments_for_an_assignment
+- classroom_get_assignment_grades
+- classroom_list_classrooms
+- classroom_get_a_classroom
+- classroom_list_assignments_for_a_classroom
+- codes_of_conduct_get_all_codes_of_conduct
+- codes_of_conduct_get_conduct_code
+- credentials_revoke
+- emojis_get
+- actions_get_actions_cache_retention_limit_for_enterprise
+- actions_set_actions_cache_retention_limit_for_enterprise
+- actions_get_actions_cache_storage_limit_for_enterprise
+- actions_set_actions_cache_storage_limit_for_enterprise
+- code_security_get_configurations_for_enterprise
+- code_security_create_configuration_for_enterprise
+- code_security_get_default_configurations_for_enterprise
+- code_security_get_single_configuration_for_enterprise
+- code_security_update_enterprise_configuration
+- code_security_delete_configuration_for_enterprise
+- code_security_attach_enterprise_configuration
+- code_security_set_configuration_as_default_for_enterprise
+- code_security_get_repositories_for_enterprise_configuration
+- dependabot_list_alerts_for_enterprise
+- enterprise_teams_list
+- enterprise_teams_create
+- enterprise_team_memberships_list
+- enterprise_team_memberships_bulk_add
+- enterprise_team_memberships_bulk_remove
+- enterprise_team_memberships_get
+- enterprise_team_memberships_add
+- enterprise_team_memberships_remove
+- enterprise_team_organizations_get_assignments
+- enterprise_team_organizations_bulk_add
+- enterprise_team_organizations_bulk_remove
+- enterprise_team_organizations_get_assignment
+- enterprise_team_organizations_add
+- enterprise_team_organizations_delete
+- enterprise_teams_get
+- enterprise_teams_update
+- enterprise_teams_delete
+- activity_list_public_events
+- activity_get_feeds
+- gists_list
+- gists_create
+- gists_list_public
+- gists_list_starred
+- gists_get
+- gists_update
+- gists_delete
+- gists_list_comments
+- gists_create_comment
+- gists_get_comment
+- gists_update_comment
+- gists_delete_comment
+- gists_list_commits
+- gists_list_forks
+- gists_fork
+- gists_check_is_starred
+- gists_star
+- gists_unstar
+- gists_get_revision
+- gitignore_get_all_templates
+- gitignore_get_template
+- apps_list_repos_accessible_to_installation
+- apps_revoke_installation_access_token
+- issues_list
+- licenses_get_all_commonly_used
+- licenses_get
+- markdown_render
+- markdown_render_raw
+- apps_get_subscription_plan_for_account
+- apps_list_plans
+- apps_list_accounts_for_plan
+- apps_get_subscription_plan_for_account_stubbed
+- apps_list_plans_stubbed
+- apps_list_accounts_for_plan_stubbed
+- meta_get
+- activity_list_public_events_for_repo_network
+- activity_list_notifications_for_authenticated_user
+- activity_mark_notifications_as_read
+- activity_get_thread
+- activity_mark_thread_as_read
+- activity_mark_thread_as_done
+- activity_get_thread_subscription_for_authenticated_user
+- activity_set_thread_subscription
+- activity_delete_thread_subscription
+- meta_get_octocat
+- orgs_list
+- actions_get_actions_cache_retention_limit_for_organization
+- actions_set_actions_cache_retention_limit_for_organization
+- actions_get_actions_cache_storage_limit_for_organization
+- actions_set_actions_cache_storage_limit_for_organization
+- dependabot_repository_access_for_org
+- dependabot_update_repository_access_for_org
+- dependabot_set_repository_access_default_level
+- billing_get_all_budgets_org
+- billing_get_budget_org
+- billing_update_budget_org
+- billing_delete_budget_org
+- billing_get_github_billing_premium_request_usage_report_org
+- billing_get_github_billing_usage_report_org
+- billing_get_github_billing_usage_summary_report_org
+- orgs_get
+- orgs_update
+- orgs_delete
+- actions_get_actions_cache_usage_for_org
+- actions_get_actions_cache_usage_by_repo_for_org
+- actions_list_hosted_runners_for_org
+- actions_create_hosted_runner_for_org
+- actions_list_custom_images_for_org
+- actions_get_custom_image_for_org
+- actions_delete_custom_image_from_org
+- actions_list_custom_image_versions_for_org
+- actions_get_custom_image_version_for_org
+- actions_delete_custom_image_version_from_org
+- actions_get_hosted_runners_github_owned_images_for_org
+- actions_get_hosted_runners_partner_images_for_org
+- actions_get_hosted_runners_limits_for_org
+- actions_get_hosted_runners_machine_specs_for_org
+- actions_get_hosted_runners_platforms_for_org
+- actions_get_hosted_runner_for_org
+- actions_update_hosted_runner_for_org
+- actions_delete_hosted_runner_for_org
+- oidc_get_oidc_custom_sub_template_for_org
+- oidc_update_oidc_custom_sub_template_for_org
+- actions_get_github_actions_permissions_organization
+- actions_set_github_actions_permissions_organization
+- actions_get_artifact_and_log_retention_settings_organization
+- actions_set_artifact_and_log_retention_settings_organization
+- actions_get_fork_pr_contributor_approval_permissions_organization
+- actions_set_fork_pr_contributor_approval_permissions_organization
+- actions_get_private_repo_fork_pr_workflows_settings_organization
+- actions_set_private_repo_fork_pr_workflows_settings_organization
+- actions_list_selected_repositories_enabled_github_actions_organization
+- actions_set_selected_repositories_enabled_github_actions_organization
+- actions_enable_selected_repository_github_actions_organization
+- actions_disable_selected_repository_github_actions_organization
+- actions_get_allowed_actions_organization
+- actions_set_allowed_actions_organization
+- actions_get_self_hosted_runners_permissions_organization
+- actions_set_self_hosted_runners_permissions_organization
+- actions_list_selected_repositories_self_hosted_runners_organization
+- actions_set_selected_repositories_self_hosted_runners_organization
+- actions_enable_selected_repository_self_hosted_runners_organization
+- actions_disable_selected_repository_self_hosted_runners_organization
+- actions_get_github_actions_default_workflow_permissions_organization
+- actions_set_github_actions_default_workflow_permissions_organization
+- actions_list_self_hosted_runner_groups_for_org
+- actions_create_self_hosted_runner_group_for_org
+- actions_get_self_hosted_runner_group_for_org
+- actions_update_self_hosted_runner_group_for_org
+- actions_delete_self_hosted_runner_group_from_org
+- actions_list_github_hosted_runners_in_group_for_org
+- actions_list_repo_access_to_self_hosted_runner_group_in_org
+- actions_set_repo_access_to_self_hosted_runner_group_in_org
+- actions_add_repo_access_to_self_hosted_runner_group_in_org
+- actions_remove_repo_access_to_self_hosted_runner_group_in_org
+- actions_list_self_hosted_runners_in_group_for_org
+- actions_set_self_hosted_runners_in_group_for_org
+- actions_add_self_hosted_runner_to_group_for_org
+- actions_remove_self_hosted_runner_from_group_for_org
+- actions_list_self_hosted_runners_for_org
+- actions_list_runner_applications_for_org
+- actions_generate_runner_jitconfig_for_org
+- actions_create_registration_token_for_org
+- actions_create_remove_token_for_org
+- actions_get_self_hosted_runner_for_org
+- actions_delete_self_hosted_runner_from_org
+- actions_list_labels_for_self_hosted_runner_for_org
+- actions_add_custom_labels_to_self_hosted_runner_for_org
+- actions_set_custom_labels_for_self_hosted_runner_for_org
+- actions_remove_all_custom_labels_from_self_hosted_runner_for_org
+- actions_remove_custom_label_from_self_hosted_runner_for_org
+- actions_list_org_secrets
+- actions_get_org_public_key
+- actions_get_org_secret
+- actions_create_or_update_org_secret
+- actions_delete_org_secret
+- actions_list_selected_repos_for_org_secret
+- actions_set_selected_repos_for_org_secret
+- actions_add_selected_repo_to_org_secret
+- actions_remove_selected_repo_from_org_secret
+- actions_list_org_variables
+- actions_create_org_variable
+- actions_get_org_variable
+- actions_update_org_variable
+- actions_delete_org_variable
+- actions_list_selected_repos_for_org_variable
+- actions_set_selected_repos_for_org_variable
+- actions_add_selected_repo_to_org_variable
+- actions_remove_selected_repo_from_org_variable
+- orgs_create_artifact_deployment_record
+- orgs_set_cluster_deployment_records
+- orgs_create_artifact_storage_record
+- orgs_list_artifact_deployment_records
+- orgs_list_artifact_storage_records
+- orgs_list_attestations_bulk
+- orgs_delete_attestations_bulk
+- orgs_delete_attestations_by_subject_digest
+- orgs_list_attestation_repositories
+- orgs_delete_attestations_by_id
+- orgs_list_attestations
+- orgs_list_blocked_users
+- orgs_check_blocked_user
+- orgs_block_user
+- orgs_unblock_user
+- campaigns_list_org_campaigns
+- campaigns_create_campaign
+- campaigns_get_campaign_summary
+- campaigns_update_campaign
+- campaigns_delete_campaign
+- code_scanning_list_alerts_for_org
+- code_security_get_configurations_for_org
+- code_security_create_configuration
+- code_security_get_default_configurations
+- code_security_detach_configuration
+- code_security_get_configuration
+- code_security_update_configuration
+- code_security_delete_configuration
+- code_security_attach_configuration
+- code_security_set_configuration_as_default
+- code_security_get_repositories_for_configuration
+- codespaces_list_in_organization
+- codespaces_set_codespaces_access
+- codespaces_set_codespaces_access_users
+- codespaces_delete_codespaces_access_users
+- codespaces_list_org_secrets
+- codespaces_get_org_public_key
+- codespaces_get_org_secret
+- codespaces_create_or_update_org_secret
+- codespaces_delete_org_secret
+- codespaces_list_selected_repos_for_org_secret
+- codespaces_set_selected_repos_for_org_secret
+- codespaces_add_selected_repo_to_org_secret
+- codespaces_remove_selected_repo_from_org_secret
+- copilot_get_copilot_organization_details
+- copilot_list_copilot_seats
+- copilot_add_copilot_seats_for_teams
+- copilot_cancel_copilot_seat_assignment_for_teams
+- copilot_add_copilot_seats_for_users
+- copilot_cancel_copilot_seat_assignment_for_users
+- copilot_copilot_content_exclusion_for_organization
+- copilot_set_copilot_content_exclusion_for_organization
+- copilot_copilot_metrics_for_organization
+- dependabot_list_alerts_for_org
+- dependabot_list_org_secrets
+- dependabot_get_org_public_key
+- dependabot_get_org_secret
+- dependabot_create_or_update_org_secret
+- dependabot_delete_org_secret
+- dependabot_list_selected_repos_for_org_secret
+- dependabot_set_selected_repos_for_org_secret
+- dependabot_add_selected_repo_to_org_secret
+- dependabot_remove_selected_repo_from_org_secret
+- packages_list_docker_migration_conflicting_packages_for_organization
+- activity_list_public_org_events
+- orgs_list_failed_invitations
+- orgs_list_webhooks
+- orgs_create_webhook
+- orgs_get_webhook
+- orgs_update_webhook
+- orgs_delete_webhook
+- orgs_get_webhook_config_for_org
+- orgs_update_webhook_config_for_org
+- orgs_list_webhook_deliveries
+- orgs_get_webhook_delivery
+- orgs_redeliver_webhook_delivery
+- orgs_ping_webhook
+- api_insights_get_route_stats_by_actor
+- api_insights_get_subject_stats
+- api_insights_get_summary_stats
+- api_insights_get_summary_stats_by_user
+- api_insights_get_summary_stats_by_actor
+- api_insights_get_time_stats
+- api_insights_get_time_stats_by_user
+- api_insights_get_time_stats_by_actor
+- api_insights_get_user_stats
+- apps_get_org_installation
+- orgs_list_app_installations
+- interactions_get_restrictions_for_org
+- interactions_set_restrictions_for_org
+- interactions_remove_restrictions_for_org
+- orgs_list_pending_invitations
+- orgs_create_invitation
+- orgs_cancel_invitation
+- orgs_list_invitation_teams
+- orgs_list_issue_types
+- orgs_create_issue_type
+- orgs_update_issue_type
+- orgs_delete_issue_type
+- issues_list_for_org
+- orgs_list_members
+- orgs_check_membership_for_user
+- orgs_remove_member
+- codespaces_get_codespaces_for_user_in_org
+- codespaces_delete_from_organization
+- codespaces_stop_in_organization
+- copilot_get_copilot_seat_details_for_user
+- orgs_get_membership_for_user
+- orgs_set_membership_for_user
+- orgs_remove_membership_for_user
+- migrations_list_for_org
+- migrations_start_for_org
+- migrations_get_status_for_org
+- migrations_download_archive_for_org
+- migrations_delete_archive_for_org
+- migrations_unlock_repo_for_org
+- migrations_list_repos_for_org
+- orgs_list_org_roles
+- orgs_revoke_all_org_roles_team
+- orgs_assign_team_to_org_role
+- orgs_revoke_org_role_team
+- orgs_revoke_all_org_roles_user
+- orgs_assign_user_to_org_role
+- orgs_revoke_org_role_user
+- orgs_get_org_role
+- orgs_list_org_role_teams
+- orgs_list_org_role_users
+- orgs_list_outside_collaborators
+- orgs_convert_member_to_outside_collaborator
+- orgs_remove_outside_collaborator
+- packages_list_packages_for_organization
+- packages_get_package_for_organization
+- packages_delete_package_for_org
+- packages_restore_package_for_org
+- packages_get_all_package_versions_for_package_owned_by_org
+- packages_get_package_version_for_organization
+- packages_delete_package_version_for_org
+- packages_restore_package_version_for_org
+- orgs_list_pat_grant_requests
+- orgs_review_pat_grant_requests_in_bulk
+- orgs_review_pat_grant_request
+- orgs_list_pat_grant_request_repositories
+- orgs_list_pat_grants
+- orgs_update_pat_accesses
+- orgs_update_pat_access
+- orgs_list_pat_grant_repositories
+- private_registries_list_org_private_registries
+- private_registries_create_org_private_registry
+- private_registries_get_org_public_key
+- private_registries_get_org_private_registry
+- private_registries_update_org_private_registry
+- private_registries_delete_org_private_registry
+- projects_list_for_org
+- projects_get_for_org
+- projects_create_draft_item_for_org
+- projects_list_fields_for_org
+- projects_add_field_for_org
+- projects_get_field_for_org
+- projects_list_items_for_org
+- projects_add_item_for_org
+- projects_get_org_item
+- projects_update_item_for_org
+- projects_delete_item_for_org
+- projects_create_view_for_org
+- projects_list_view_items_for_org
+- orgs_custom_properties_for_repos_get_organization_definitions
+- orgs_custom_properties_for_repos_create_or_update_organization_definitions
+- orgs_custom_properties_for_repos_get_organization_definition
+- orgs_custom_properties_for_repos_create_or_update_organization_definition
+- orgs_custom_properties_for_repos_delete_organization_definition
+- orgs_custom_properties_for_repos_get_organization_values
+- orgs_custom_properties_for_repos_create_or_update_organization_values
+- orgs_list_public_members
+- orgs_check_public_membership_for_user
+- orgs_set_public_membership_for_authenticated_user
+- orgs_remove_public_membership_for_authenticated_user
+- repos_list_for_org
+- repos_create_in_org
+- repos_get_org_rulesets
+- repos_create_org_ruleset
+- repos_get_org_rule_suites
+- repos_get_org_rule_suite
+- repos_get_org_ruleset
+- repos_update_org_ruleset
+- repos_delete_org_ruleset
+- orgs_get_org_ruleset_history
+- orgs_get_org_ruleset_version
+- secret_scanning_list_alerts_for_org
+- secret_scanning_list_org_pattern_configs
+- secret_scanning_update_org_pattern_configs
+- security_advisories_list_org_repository_advisories
+- orgs_list_security_manager_teams
+- orgs_add_security_manager_team
+- orgs_remove_security_manager_team
+- orgs_get_immutable_releases_settings
+- orgs_set_immutable_releases_settings
+- orgs_get_immutable_releases_settings_repositories
+- orgs_set_immutable_releases_settings_repositories
+- orgs_enable_selected_repository_immutable_releases_organization
+- orgs_disable_selected_repository_immutable_releases_organization
+- hosted_compute_list_network_configurations_for_org
+- hosted_compute_create_network_configuration_for_org
+- hosted_compute_get_network_configuration_for_org
+- hosted_compute_update_network_configuration_for_org
+- hosted_compute_delete_network_configuration_from_org
+- hosted_compute_get_network_settings_for_org
+- copilot_copilot_metrics_for_team
+- teams_list
+- teams_create
+- teams_get_by_name
+- teams_update_in_org
+- teams_delete_in_org
+- teams_list_pending_invitations_in_org
+- teams_list_members_in_org
+- teams_get_membership_for_user_in_org
+- teams_add_or_update_membership_for_user_in_org
+- teams_remove_membership_for_user_in_org
+- teams_list_repos_in_org
+- teams_check_permissions_for_repo_in_org
+- teams_add_or_update_repo_permissions_in_org
+- teams_remove_repo_in_org
+- teams_list_child_in_org
+- orgs_enable_or_disable_security_product_on_all_org_repos
+- rate_limit_get
+- repos_get
+- repos_update
+- repos_delete
+- actions_list_artifacts_for_repo
+- actions_get_artifact
+- actions_delete_artifact
+- actions_download_artifact
+- actions_get_actions_cache_retention_limit_for_repository
+- actions_set_actions_cache_retention_limit_for_repository
+- actions_get_actions_cache_storage_limit_for_repository
+- actions_set_actions_cache_storage_limit_for_repository
+- actions_get_actions_cache_usage
+- actions_get_actions_cache_list
+- actions_delete_actions_cache_by_key
+- actions_delete_actions_cache_by_id
+- actions_get_job_for_workflow_run
+- actions_download_job_logs_for_workflow_run
+- actions_re_run_job_for_workflow_run
+- actions_get_custom_oidc_sub_claim_for_repo
+- actions_set_custom_oidc_sub_claim_for_repo
+- actions_list_repo_organization_secrets
+- actions_list_repo_organization_variables
+- actions_get_github_actions_permissions_repository
+- actions_set_github_actions_permissions_repository
+- actions_get_workflow_access_to_repository
+- actions_set_workflow_access_to_repository
+- actions_get_artifact_and_log_retention_settings_repository
+- actions_set_artifact_and_log_retention_settings_repository
+- actions_get_fork_pr_contributor_approval_permissions_repository
+- actions_set_fork_pr_contributor_approval_permissions_repository
+- actions_get_private_repo_fork_pr_workflows_settings_repository
+- actions_set_private_repo_fork_pr_workflows_settings_repository
+- actions_get_allowed_actions_repository
+- actions_set_allowed_actions_repository
+- actions_get_github_actions_default_workflow_permissions_repository
+- actions_set_github_actions_default_workflow_permissions_repository
+- actions_list_self_hosted_runners_for_repo
+- actions_list_runner_applications_for_repo
+- actions_generate_runner_jitconfig_for_repo
+- actions_create_registration_token_for_repo
+- actions_create_remove_token_for_repo
+- actions_get_self_hosted_runner_for_repo
+- actions_delete_self_hosted_runner_from_repo
+- actions_list_labels_for_self_hosted_runner_for_repo
+- actions_add_custom_labels_to_self_hosted_runner_for_repo
+- actions_set_custom_labels_for_self_hosted_runner_for_repo
+- actions_remove_all_custom_labels_from_self_hosted_runner_for_repo
+- actions_remove_custom_label_from_self_hosted_runner_for_repo
+- actions_list_workflow_runs_for_repo
+- actions_get_workflow_run
+- actions_delete_workflow_run
+- actions_get_reviews_for_run
+- actions_approve_workflow_run
+- actions_list_workflow_run_artifacts
+- actions_get_workflow_run_attempt
+- actions_list_jobs_for_workflow_run_attempt
+- actions_download_workflow_run_attempt_logs
+- actions_cancel_workflow_run
+- actions_review_custom_gates_for_run
+- actions_force_cancel_workflow_run
+- actions_list_jobs_for_workflow_run
+- actions_download_workflow_run_logs
+- actions_delete_workflow_run_logs
+- actions_get_pending_deployments_for_run
+- actions_review_pending_deployments_for_run
+- actions_re_run_workflow
+- actions_re_run_workflow_failed_jobs
+- actions_get_workflow_run_usage
+- actions_list_repo_secrets
+- actions_get_repo_public_key
+- actions_get_repo_secret
+- actions_create_or_update_repo_secret
+- actions_delete_repo_secret
+- actions_list_repo_variables
+- actions_create_repo_variable
+- actions_get_repo_variable
+- actions_update_repo_variable
+- actions_delete_repo_variable
+- actions_list_repo_workflows
+- actions_get_workflow
+- actions_disable_workflow
+- actions_create_workflow_dispatch
+- actions_enable_workflow
+- actions_list_workflow_runs
+- actions_get_workflow_usage
+- repos_list_activities
+- issues_list_assignees
+- issues_check_user_can_be_assigned
+- repos_create_attestation
+- repos_list_attestations
+- repos_list_autolinks
+- repos_create_autolink
+- repos_get_autolink
+- repos_delete_autolink
+- repos_check_automated_security_fixes
+- repos_enable_automated_security_fixes
+- repos_disable_automated_security_fixes
+- repos_list_branches
+- repos_get_branch
+- repos_get_branch_protection
+- repos_update_branch_protection
+- repos_delete_branch_protection
+- repos_get_admin_branch_protection
+- repos_set_admin_branch_protection
+- repos_delete_admin_branch_protection
+- repos_get_pull_request_review_protection
+- repos_update_pull_request_review_protection
+- repos_delete_pull_request_review_protection
+- repos_get_commit_signature_protection
+- repos_create_commit_signature_protection
+- repos_delete_commit_signature_protection
+- repos_get_status_checks_protection
+- repos_update_status_check_protection
+- repos_remove_status_check_protection
+- repos_get_all_status_check_contexts
+- repos_add_status_check_contexts
+- repos_set_status_check_contexts
+- repos_remove_status_check_contexts
+- repos_get_access_restrictions
+- repos_delete_access_restrictions
+- repos_get_apps_with_access_to_protected_branch
+- repos_add_app_access_restrictions
+- repos_set_app_access_restrictions
+- repos_remove_app_access_restrictions
+- repos_get_teams_with_access_to_protected_branch
+- repos_add_team_access_restrictions
+- repos_set_team_access_restrictions
+- repos_remove_team_access_restrictions
+- repos_get_users_with_access_to_protected_branch
+- repos_add_user_access_restrictions
+- repos_set_user_access_restrictions
+- repos_remove_user_access_restrictions
+- repos_rename_branch
+- checks_create
+- checks_get
+- checks_update
+- checks_list_annotations
+- checks_rerequest_run
+- checks_create_suite
+- checks_set_suites_preferences
+- checks_get_suite
+- checks_list_for_suite
+- checks_rerequest_suite
+- code_scanning_list_alerts_for_repo
+- code_scanning_get_alert
+- code_scanning_update_alert
+- code_scanning_get_autofix
+- code_scanning_create_autofix
+- code_scanning_commit_autofix
+- code_scanning_list_alert_instances
+- code_scanning_list_recent_analyses
+- code_scanning_get_analysis
+- code_scanning_delete_analysis
+- code_scanning_list_codeql_databases
+- code_scanning_get_codeql_database
+- code_scanning_delete_codeql_database
+- code_scanning_create_variant_analysis
+- code_scanning_get_variant_analysis
+- code_scanning_get_variant_analysis_repo_task
+- code_scanning_get_default_setup
+- code_scanning_update_default_setup
+- code_scanning_upload_sarif
+- code_scanning_get_sarif
+- code_security_get_configuration_for_repository
+- repos_codeowners_errors
+- codespaces_list_in_repository_for_authenticated_user
+- codespaces_create_with_repo_for_authenticated_user
+- codespaces_list_devcontainers_in_repository_for_authenticated_user
+- codespaces_repo_machines_for_authenticated_user
+- codespaces_pre_flight_with_repo_for_authenticated_user
+- codespaces_check_permissions_for_devcontainer
+- codespaces_list_repo_secrets
+- codespaces_get_repo_public_key
+- codespaces_get_repo_secret
+- codespaces_create_or_update_repo_secret
+- codespaces_delete_repo_secret
+- repos_list_collaborators
+- repos_check_collaborator
+- repos_add_collaborator
+- repos_remove_collaborator
+- repos_get_collaborator_permission_level
+- repos_list_commit_comments_for_repo
+- repos_get_commit_comment
+- repos_update_commit_comment
+- repos_delete_commit_comment
+- reactions_list_for_commit_comment
+- reactions_create_for_commit_comment
+- reactions_delete_for_commit_comment
+- repos_list_commits
+- repos_list_branches_for_head_commit
+- repos_list_comments_for_commit
+- repos_create_commit_comment
+- repos_list_pull_requests_associated_with_commit
+- repos_get_commit
+- checks_list_for_ref
+- checks_list_suites_for_ref
+- repos_get_combined_status_for_ref
+- repos_list_commit_statuses_for_ref
+- repos_get_community_profile_metrics
+- repos_compare_commits
+- repos_get_content
+- repos_create_or_update_file_contents
+- repos_delete_file
+- repos_list_contributors
+- dependabot_list_alerts_for_repo
+- dependabot_get_alert
+- dependabot_update_alert
+- dependabot_list_repo_secrets
+- dependabot_get_repo_public_key
+- dependabot_get_repo_secret
+- dependabot_create_or_update_repo_secret
+- dependabot_delete_repo_secret
+- dependency_graph_diff_range
+- dependency_graph_export_sbom
+- dependency_graph_create_repository_snapshot
+- repos_list_deployments
+- repos_create_deployment
+- repos_get_deployment
+- repos_delete_deployment
+- repos_list_deployment_statuses
+- repos_create_deployment_status
+- repos_get_deployment_status
+- repos_create_dispatch_event
+- repos_get_all_environments
+- repos_get_environment
+- repos_create_or_update_environment
+- repos_delete_an_environment
+- repos_list_deployment_branch_policies
+- repos_create_deployment_branch_policy
+- repos_get_deployment_branch_policy
+- repos_update_deployment_branch_policy
+- repos_delete_deployment_branch_policy
+- repos_get_all_deployment_protection_rules
+- repos_create_deployment_protection_rule
+- repos_list_custom_deployment_rule_integrations
+- repos_get_custom_deployment_protection_rule
+- repos_disable_deployment_protection_rule
+- actions_list_environment_secrets
+- actions_get_environment_public_key
+- actions_get_environment_secret
+- actions_create_or_update_environment_secret
+- actions_delete_environment_secret
+- actions_list_environment_variables
+- actions_create_environment_variable
+- actions_get_environment_variable
+- actions_update_environment_variable
+- actions_delete_environment_variable
+- activity_list_repo_events
+- repos_list_forks
+- repos_create_fork
+- git_create_blob
+- git_get_blob
+- git_create_commit
+- git_get_commit
+- git_list_matching_refs
+- git_get_ref
+- git_create_ref
+- git_update_ref
+- git_delete_ref
+- git_create_tag
+- git_get_tag
+- git_create_tree
+- git_get_tree
+- repos_list_webhooks
+- repos_create_webhook
+- repos_get_webhook
+- repos_update_webhook
+- repos_delete_webhook
+- repos_get_webhook_config_for_repo
+- repos_update_webhook_config_for_repo
+- repos_list_webhook_deliveries
+- repos_get_webhook_delivery
+- repos_redeliver_webhook_delivery
+- repos_ping_webhook
+- repos_test_push_webhook
+- repos_check_immutable_releases
+- repos_enable_immutable_releases
+- repos_disable_immutable_releases
+- migrations_get_import_status
+- migrations_start_import
+- migrations_update_import
+- migrations_cancel_import
+- migrations_get_commit_authors
+- migrations_map_commit_author
+- migrations_get_large_files
+- migrations_set_lfs_preference
+- apps_get_repo_installation
+- interactions_get_restrictions_for_repo
+- interactions_set_restrictions_for_repo
+- interactions_remove_restrictions_for_repo
+- repos_list_invitations
+- repos_update_invitation
+- repos_delete_invitation
+- issues_list_for_repo
+- issues_create
+- issues_list_comments_for_repo
+- issues_get_comment
+- issues_update_comment
+- issues_delete_comment
+- issues_pin_comment
+- issues_unpin_comment
+- reactions_list_for_issue_comment
+- reactions_create_for_issue_comment
+- reactions_delete_for_issue_comment
+- issues_list_events_for_repo
+- issues_get_event
+- issues_get
+- issues_update
+- issues_add_assignees
+- issues_remove_assignees
+- issues_check_user_can_be_assigned_to_issue
+- issues_list_comments
+- issues_create_comment
+- issues_list_dependencies_blocked_by
+- issues_add_blocked_by_dependency
+- issues_remove_dependency_blocked_by
+- issues_list_dependencies_blocking
+- issues_list_events
+- issues_list_labels_on_issue
+- issues_add_labels
+- issues_set_labels
+- issues_remove_all_labels
+- issues_remove_label
+- issues_lock
+- issues_unlock
+- issues_get_parent
+- reactions_list_for_issue
+- reactions_create_for_issue
+- reactions_delete_for_issue
+- issues_remove_sub_issue
+- issues_list_sub_issues
+- issues_add_sub_issue
+- issues_reprioritize_sub_issue
+- issues_list_events_for_timeline
+- repos_list_deploy_keys
+- repos_create_deploy_key
+- repos_get_deploy_key
+- repos_delete_deploy_key
+- issues_list_labels_for_repo
+- issues_create_label
+- issues_get_label
+- issues_update_label
+- issues_delete_label
+- repos_list_languages
+- licenses_get_for_repo
+- repos_merge_upstream
+- repos_merge
+- issues_list_milestones
+- issues_create_milestone
+- issues_get_milestone
+- issues_update_milestone
+- issues_delete_milestone
+- issues_list_labels_for_milestone
+- activity_list_repo_notifications_for_authenticated_user
+- activity_mark_repo_notifications_as_read
+- repos_get_pages
+- repos_create_pages_site
+- repos_update_information_about_pages_site
+- repos_delete_pages_site
+- repos_list_pages_builds
+- repos_request_pages_build
+- repos_get_latest_pages_build
+- repos_get_pages_build
+- repos_create_pages_deployment
+- repos_get_pages_deployment
+- repos_cancel_pages_deployment
+- repos_get_pages_health_check
+- repos_check_private_vulnerability_reporting
+- repos_enable_private_vulnerability_reporting
+- repos_disable_private_vulnerability_reporting
+- repos_custom_properties_for_repos_get_repository_values
+- repos_custom_properties_for_repos_create_or_update_repository_values
+- pulls_list
+- pulls_create
+- pulls_list_review_comments_for_repo
+- pulls_get_review_comment
+- pulls_update_review_comment
+- pulls_delete_review_comment
+- reactions_list_for_pull_request_review_comment
+- reactions_create_for_pull_request_review_comment
+- reactions_delete_for_pull_request_comment
+- pulls_get
+- pulls_update
+- codespaces_create_with_pr_for_authenticated_user
+- pulls_list_review_comments
+- pulls_create_review_comment
+- pulls_create_reply_for_review_comment
+- pulls_list_commits
+- pulls_list_files
+- pulls_check_if_merged
+- pulls_merge
+- pulls_list_requested_reviewers
+- pulls_request_reviewers
+- pulls_remove_requested_reviewers
+- pulls_list_reviews
+- pulls_create_review
+- pulls_get_review
+- pulls_update_review
+- pulls_delete_pending_review
+- pulls_list_comments_for_review
+- pulls_dismiss_review
+- pulls_submit_review
+- pulls_update_branch
+- repos_get_readme
+- repos_get_readme_in_directory
+- repos_list_releases
+- repos_create_release
+- repos_get_release_asset
+- repos_update_release_asset
+- repos_delete_release_asset
+- repos_generate_release_notes
+- repos_get_latest_release
+- repos_get_release_by_tag
+- repos_get_release
+- repos_update_release
+- repos_delete_release
+- repos_list_release_assets
+- repos_upload_release_asset
+- reactions_list_for_release
+- reactions_create_for_release
+- reactions_delete_for_release
+- repos_get_branch_rules
+- repos_get_repo_rulesets
+- repos_create_repo_ruleset
+- repos_get_repo_rule_suites
+- repos_get_repo_rule_suite
+- repos_get_repo_ruleset
+- repos_update_repo_ruleset
+- repos_delete_repo_ruleset
+- repos_get_repo_ruleset_history
+- repos_get_repo_ruleset_version
+- secret_scanning_list_alerts_for_repo
+- secret_scanning_get_alert
+- secret_scanning_update_alert
+- secret_scanning_list_locations_for_alert
+- secret_scanning_create_push_protection_bypass
+- secret_scanning_get_scan_history
+- security_advisories_list_repository_advisories
+- security_advisories_create_repository_advisory
+- security_advisories_create_private_vulnerability_report
+- security_advisories_get_repository_advisory
+- security_advisories_update_repository_advisory
+- security_advisories_create_repository_advisory_cve_request
+- security_advisories_create_fork
+- activity_list_stargazers_for_repo
+- repos_get_code_frequency_stats
+- repos_get_commit_activity_stats
+- repos_get_contributors_stats
+- repos_get_participation_stats
+- repos_get_punch_card_stats
+- repos_create_commit_status
+- activity_list_watchers_for_repo
+- activity_get_repo_subscription
+- activity_set_repo_subscription
+- activity_delete_repo_subscription
+- repos_list_tags
+- repos_download_tarball_archive
+- repos_list_teams
+- repos_get_all_topics
+- repos_replace_all_topics
+- repos_get_clones
+- repos_get_top_paths
+- repos_get_top_referrers
+- repos_get_views
+- repos_transfer
+- repos_check_vulnerability_alerts
+- repos_enable_vulnerability_alerts
+- repos_disable_vulnerability_alerts
+- repos_download_zipball_archive
+- repos_create_using_template
+- repos_list_public
+- search_code
+- search_commits
+- search_issues_and_pull_requests
+- search_labels
+- search_repos
+- search_topics
+- search_users
+- teams_get_legacy
+- teams_update_legacy
+- teams_delete_legacy
+- teams_list_pending_invitations_legacy
+- teams_list_members_legacy
+- teams_get_member_legacy
+- teams_add_member_legacy
+- teams_remove_member_legacy
+- teams_get_membership_for_user_legacy
+- teams_add_or_update_membership_for_user_legacy
+- teams_remove_membership_for_user_legacy
+- teams_list_repos_legacy
+- teams_check_permissions_for_repo_legacy
+- teams_add_or_update_repo_permissions_legacy
+- teams_remove_repo_legacy
+- teams_list_child_legacy
+- users_get_authenticated
+- users_update_authenticated
+- users_list_blocked_by_authenticated_user
+- users_check_blocked
+- users_block
+- users_unblock
+- codespaces_list_for_authenticated_user
+- codespaces_create_for_authenticated_user
+- codespaces_list_secrets_for_authenticated_user
+- codespaces_get_public_key_for_authenticated_user
+- codespaces_get_secret_for_authenticated_user
+- codespaces_create_or_update_secret_for_authenticated_user
+- codespaces_delete_secret_for_authenticated_user
+- codespaces_list_repositories_for_secret_for_authenticated_user
+- codespaces_set_repositories_for_secret_for_authenticated_user
+- codespaces_add_repository_for_secret_for_authenticated_user
+- codespaces_remove_repository_for_secret_for_authenticated_user
+- codespaces_get_for_authenticated_user
+- codespaces_update_for_authenticated_user
+- codespaces_delete_for_authenticated_user
+- codespaces_export_for_authenticated_user
+- codespaces_get_export_details_for_authenticated_user
+- codespaces_codespace_machines_for_authenticated_user
+- codespaces_publish_for_authenticated_user
+- codespaces_start_for_authenticated_user
+- codespaces_stop_for_authenticated_user
+- packages_list_docker_migration_conflicting_packages_for_authenticated_user
+- users_set_primary_email_visibility_for_authenticated_user
+- users_list_emails_for_authenticated_user
+- users_add_email_for_authenticated_user
+- users_delete_email_for_authenticated_user
+- users_list_followers_for_authenticated_user
+- users_list_followed_by_authenticated_user
+- users_check_person_is_followed_by_authenticated
+- users_follow
+- users_unfollow
+- users_list_gpg_keys_for_authenticated_user
+- users_create_gpg_key_for_authenticated_user
+- users_get_gpg_key_for_authenticated_user
+- users_delete_gpg_key_for_authenticated_user
+- apps_list_installations_for_authenticated_user
+- apps_list_installation_repos_for_authenticated_user
+- apps_add_repo_to_installation_for_authenticated_user
+- apps_remove_repo_from_installation_for_authenticated_user
+- interactions_get_restrictions_for_authenticated_user
+- interactions_set_restrictions_for_authenticated_user
+- interactions_remove_restrictions_for_authenticated_user
+- issues_list_for_authenticated_user
+- users_list_public_ssh_keys_for_authenticated_user
+- users_create_public_ssh_key_for_authenticated_user
+- users_get_public_ssh_key_for_authenticated_user
+- users_delete_public_ssh_key_for_authenticated_user
+- apps_list_subscriptions_for_authenticated_user
+- apps_list_subscriptions_for_authenticated_user_stubbed
+- orgs_list_memberships_for_authenticated_user
+- orgs_get_membership_for_authenticated_user
+- orgs_update_membership_for_authenticated_user
+- migrations_list_for_authenticated_user
+- migrations_start_for_authenticated_user
+- migrations_get_status_for_authenticated_user
+- migrations_get_archive_for_authenticated_user
+- migrations_delete_archive_for_authenticated_user
+- migrations_unlock_repo_for_authenticated_user
+- migrations_list_repos_for_authenticated_user
+- orgs_list_for_authenticated_user
+- packages_list_packages_for_authenticated_user
+- packages_get_package_for_authenticated_user
+- packages_delete_package_for_authenticated_user
+- packages_restore_package_for_authenticated_user
+- packages_get_all_package_versions_for_package_owned_by_authenticated_user
+- packages_get_package_version_for_authenticated_user
+- packages_delete_package_version_for_authenticated_user
+- packages_restore_package_version_for_authenticated_user
+- users_list_public_emails_for_authenticated_user
+- repos_list_for_authenticated_user
+- repos_create_for_authenticated_user
+- repos_list_invitations_for_authenticated_user
+- repos_accept_invitation_for_authenticated_user
+- repos_decline_invitation_for_authenticated_user
+- users_list_social_accounts_for_authenticated_user
+- users_add_social_account_for_authenticated_user
+- users_delete_social_account_for_authenticated_user
+- users_list_ssh_signing_keys_for_authenticated_user
+- users_create_ssh_signing_key_for_authenticated_user
+- users_get_ssh_signing_key_for_authenticated_user
+- users_delete_ssh_signing_key_for_authenticated_user
+- activity_list_repos_starred_by_authenticated_user
+- activity_check_repo_is_starred_by_authenticated_user
+- activity_star_repo_for_authenticated_user
+- activity_unstar_repo_for_authenticated_user
+- activity_list_watched_repos_for_authenticated_user
+- teams_list_for_authenticated_user
+- users_get_by_id
+- projects_create_draft_item_for_authenticated_user
+- users_list
+- projects_create_view_for_user
+- users_get_by_username
+- users_list_attestations_bulk
+- users_delete_attestations_bulk
+- users_delete_attestations_by_subject_digest
+- users_delete_attestations_by_id
+- users_list_attestations
+- packages_list_docker_migration_conflicting_packages_for_user
+- activity_list_events_for_authenticated_user
+- activity_list_org_events_for_authenticated_user
+- activity_list_public_events_for_user
+- users_list_followers_for_user
+- users_list_following_for_user
+- users_check_following_for_user
+- gists_list_for_user
+- users_list_gpg_keys_for_user
+- users_get_context_for_user
+- apps_get_user_installation
+- users_list_public_keys_for_user
+- orgs_list_for_user
+- packages_list_packages_for_user
+- packages_get_package_for_user
+- packages_delete_package_for_user
+- packages_restore_package_for_user
+- packages_get_all_package_versions_for_package_owned_by_user
+- packages_get_package_version_for_user
+- packages_delete_package_version_for_user
+- packages_restore_package_version_for_user
+- projects_list_for_user
+- projects_get_for_user
+- projects_list_fields_for_user
+- projects_add_field_for_user
+- projects_get_field_for_user
+- projects_list_items_for_user
+- projects_add_item_for_user
+- projects_get_user_item
+- projects_update_item_for_user
+- projects_delete_item_for_user
+- projects_list_view_items_for_user
+- activity_list_received_events_for_user
+- activity_list_received_public_events_for_user
+- repos_list_for_user
+- billing_get_github_billing_premium_request_usage_report_user
+- billing_get_github_billing_usage_report_user
+- billing_get_github_billing_usage_summary_report_user
+- users_list_social_accounts_for_user
+- users_list_ssh_signing_keys_for_user
+- activity_list_repos_starred_by_user
+- activity_list_repos_watched_by_user
+- meta_get_all_versions
+- meta_get_zen
+
+## Tools WITH Optimization
+- Count: 108
+
+- list_user_marketplace_subscriptions: List active marketplace subscriptions for the authenticated user, returning subscription details and billing information.
+- get_thread_subscription: Check if the authenticated user is subscribed to a notification thread, returning subscription status.
+- set_thread_subscription: Subscribe to or ignore notifications for a thread, controlling future notification delivery.
+- delete_thread_subscription: Unsubscribe from a notification thread, muting all future notifications until mentioned or commented.
+- get_repo_subscription: Get the authenticated user's subscription status for a repository, returning watch and notification settings.
+- set_repo_subscription: Watch or ignore a repository by setting subscription preferences for notifications.
+- delete_repo_subscription: Stop watching a repository, removing it from your subscriptions list.
+- list_watched_repos: List repositories watched by the authenticated user, returning repository details and watch status.
+- list_user_watched_repos: List repositories watched by a specific user, returning their public watch list.
+- search_security_advisories: Search global security advisories by various criteria, returning matching vulnerability reports and metadata.
+- get_security_advisory: Get detailed information about a specific security advisory by its GHSA identifier.
+- get_authenticated_app: Get details about the authenticated GitHub App, including installation count and configuration.
+- list_app_installations: List all installations of the authenticated GitHub App, returning installation details and permissions.
+- get_app_installation: Get detailed information about a specific app installation by its ID.
+- delete_app_installation: Delete a GitHub App installation by ID and return confirmation
+- create_installation_access_token: Create an installation access token for a GitHub App with optional repository and permission scoping
+- suspend_app_installation: Suspend a GitHub App installation to block access to resources
+- unsuspend_app_installation: Remove suspension from a GitHub App installation to restore access
+- revoke_app_authorization: Revoke an OAuth authorization grant for a GitHub App using access token
+- check_oauth_token: Check validity of an OAuth token without exceeding rate limits
+- reset_oauth_token: Reset an OAuth token and return a new token with same permissions
+- delete_oauth_token: Delete an OAuth token to revoke access for a GitHub App
+- create_scoped_access_token: Create a repository-scoped and permission-scoped user access token from a non-scoped token
+- get_app_by_slug: Get a GitHub App by its URL-friendly slug name and return app details
+- get_classroom_assignment: Get a GitHub Classroom assignment by ID and return assignment details
+- list_accepted_assignments: List student repositories created from accepting a classroom assignment with pagination
+- get_assignment_grades: Get grades for a GitHub Classroom assignment and return grading data
+- list_classrooms: List GitHub Classroom classrooms for the current user, returning only classrooms where user is an administrator.
+- get_classroom: Get a specific GitHub Classroom by ID, returning classroom details if user is an administrator.
+- list_classroom_assignments: List assignments for a specific classroom, returning assignment details if user is an administrator.
+- list_codes_of_conduct: Get all GitHub codes of conduct, returning array of available conduct codes.
+- get_code_of_conduct: Get details about a specific GitHub code of conduct by key, returning conduct information.
+- revoke_credentials: Submit a list of exposed credentials for revocation, accepting up to 1000 credentials per request.
+- get_emojis: Get all emojis available on GitHub, returning emoji name to URL mappings.
+- get_enterprise_cache_retention_limit: Get GitHub Actions cache retention limit for an enterprise, returning current retention policy.
+- set_enterprise_cache_retention_limit: Set GitHub Actions cache retention limit for an enterprise, updating the maximum retention days policy.
+- get_enterprise_cache_storage_limit: Get GitHub Actions cache storage limit for an enterprise, returning current storage policy.
+- set_enterprise_cache_storage_limit: Set GitHub Actions cache storage limit for an enterprise, updating the maximum storage size policy.
+- list_enterprise_security_configurations: List all code security configurations available in an enterprise, returning configuration details.
+- create_enterprise_security_config: Create a code security configuration for an enterprise and return the configuration details
+- get_enterprise_security_config: Retrieve a specific code security configuration by ID and return its details
+- update_enterprise_security_config: Update an existing code security configuration and return the updated configuration
+- delete_enterprise_security_config: Delete a code security configuration from an enterprise
+- list_dependabot_alerts: List Dependabot alerts for repositories owned by the enterprise with filtering options
+- list_enterprise_teams: List all teams in the enterprise and return team details with pagination
+- create_enterprise_team: Create a new enterprise team and return the team details
+- get_enterprise_team: Get a specific enterprise team by slug and return team details
+- list_team_members: List all members of an enterprise team and return member details with pagination
+- add_team_member: Add a user to an enterprise team and return success confirmation
+- remove_team_member: Remove a user from an enterprise team and return success confirmation
+- delete_enterprise_team: Delete an enterprise team by slug, removing all IdP mappings
+- list_public_events: List recent public events across GitHub with pagination
+- get_feeds: Get available feeds including timeline and user feeds with URLs
+- list_gists: List authenticated user's gists or all public gists with filtering
+- create_gist: Create a new gist with one or more files and return the gist details
+- list_public_gists: List public gists sorted by most recently updated with pagination
+- list_starred_gists: List the authenticated user's starred gists with pagination
+- get_gist: Get a specific gist by ID and return its content and metadata
+- update_gist: Update a gist's description and files, returning the updated gist
+- delete_gist: Delete a gist permanently by ID
+- list_gist_comments: List all comments on a gist with pagination
+- create_gist_comment: Create a comment on a gist and return the comment details
+- get_gist_comment: Get a specific comment on a gist by comment ID
+- update_gist_comment: Update a comment on a gist and return the updated comment details.
+- delete_gist_comment: Delete a comment from a gist and return confirmation.
+- list_gist_commits: List all commits for a gist and return commit history with pagination.
+- list_gist_forks: List all forks of a gist and return fork details with pagination.
+- fork_gist: Create a fork of a gist and return the new forked gist details.
+- check_gist_starred: Check if a gist is starred by the authenticated user and return star status.
+- star_gist: Star a gist and return confirmation of the star action.
+- unstar_gist: Remove star from a gist and return confirmation of the unstar action.
+- get_gist_revision: Get a specific revision of a gist and return the gist content at that commit.
+- list_gitignore_templates: List all available gitignore templates and return template names for repository creation.
+- get_gitignore_template: Get the content of a specific gitignore template and return the template file content.
+- list_installation_repositories: List repositories accessible to an app installation and return repository details with pagination.
+- list_issues: List issues assigned to the authenticated user across all visible repositories, returning issues with metadata and pagination.
+- get_license: Get information about a specific license by key, returning license details and terms.
+- render_markdown: Render Markdown text to HTML, supporting GitHub Flavored Markdown with optional repository context.
+- get_github_meta: Get GitHub meta information including IP addresses, SSH key fingerprints, and service status.
+- list_notifications: List all notifications for the authenticated user, sorted by most recently updated.
+- mark_notifications_read: Mark all notifications as read for the current user, optionally filtering by timestamp.
+- get_notification_thread: Get information about a specific notification thread by ID.
+- mark_thread_read: Mark a notification thread as read by thread ID.
+- list_organizations: List all organizations in creation order, returning organization details with pagination.
+- get_organization: Get detailed information about an organization including settings and member permissions.
+- update_organization: Update organization settings including member permissions, repository creation, and security features.
+- get_org_hosted_runner_platforms: List available platforms for GitHub-hosted runners in an organization and return platform options.
+- get_org_hosted_runner: Fetch details of a specific GitHub-hosted runner in an organization and return runner configuration.
+- update_org_hosted_runner: Update configuration of a GitHub-hosted runner in an organization and return updated runner details.
+- delete_org_hosted_runner: Delete a GitHub-hosted runner from an organization and return confirmation.
+- get_org_oidc_template: Get OIDC subject claim customization template for an organization and return template configuration.
+- set_org_oidc_template: Create or update OIDC subject claim customization template for an organization and return success confirmation.
+- get_org_actions_permissions: Get GitHub Actions permissions policy for an organization and return enabled repositories and allowed actions settings.
+- set_org_actions_permissions: Configure GitHub Actions permissions policy for an organization and return updated settings.
+- list_org_enabled_repositories: List repositories enabled for GitHub Actions in an organization and return repository list with pagination.
+- set_org_enabled_repositories: Replace the list of repositories enabled for GitHub Actions in an organization and return confirmation.
+- get_org_workflow_permissions: Get default workflow permissions for an organization and return token permissions and approval settings.
+- set_org_workflow_permissions: Set default workflow permissions for an organization and configure token permissions and approval settings.
+- list_org_runner_groups: List all self-hosted runner groups for an organization and return groups with their configurations.
+- create_org_runner_group: Create a new self-hosted runner group for an organization and return the created group details.
+- get_org_runner_group: Get a specific self-hosted runner group for an organization and return its configuration details.
+- update_org_runner_group: Update a self-hosted runner group's name and visibility settings and return the updated group.
+- delete_org_runner_group: Delete a self-hosted runner group from an organization and remove all associated configurations.
+- list_org_runners: List all self-hosted runners for an organization and return runner details with status information.
+- get_org_runner: Get a specific self-hosted runner for an organization and return its configuration and status details.
+- delete_org_runner: Delete a self-hosted runner from an organization and force its removal.
+- create_org_runner_registration_token: Create a registration token for adding new runners to an organization and return the temporary token.
+- create_org_runner_remove_token: Create a remove token for unregistering runners from an organization and return the temporary token.
+
+## What the Optimizer Removed and Why
+- Removed total: 971
+- Admin: 280
+- Deprecated: 21
+- Redundant: 479
+- Low-value: 191
+
+### Removed examples by category
+- Admin examples:
+- code_security_get_default_configurations_for_enterprise (GET /enterprises/{enterprise}/code-security/configurations/defaults)
+- code_security_set_configuration_as_default_for_enterprise (PUT /enterprises/{enterprise}/code-security/configurations/{configuration_id}/defaults)
+- code_security_get_repositories_for_enterprise_configuration (GET /enterprises/{enterprise}/code-security/configurations/{configuration_id}/repositories)
+- enterprise_team_memberships_bulk_add (POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/add)
+- enterprise_team_memberships_bulk_remove (POST /enterprises/{enterprise}/teams/{enterprise-team}/memberships/remove)
+- enterprise_team_memberships_get (GET /enterprises/{enterprise}/teams/{enterprise-team}/memberships/{username})
+- enterprise_team_organizations_get_assignments (GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations)
+- enterprise_team_organizations_bulk_add (POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/add)
+- enterprise_team_organizations_bulk_remove (POST /enterprises/{enterprise}/teams/{enterprise-team}/organizations/remove)
+- enterprise_team_organizations_get_assignment (GET /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org})
+- enterprise_team_organizations_add (PUT /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org})
+- enterprise_team_organizations_delete (DELETE /enterprises/{enterprise}/teams/{enterprise-team}/organizations/{org})
+- enterprise_teams_update (PATCH /enterprises/{enterprise}/teams/{team_slug})
+- apps_get_subscription_plan_for_account (GET /marketplace_listing/accounts/{account_id})
+- apps_get_subscription_plan_for_account_stubbed (GET /marketplace_listing/stubbed/accounts/{account_id})
+- Deprecated examples:
+- repos_get_collaborator_permission_level (GET /repos/{owner}/{repo}/collaborators/{username}/permission)
+- pulls_list (GET /repos/{owner}/{repo}/pulls)
+- pulls_create (POST /repos/{owner}/{repo}/pulls)
+- pulls_get (GET /repos/{owner}/{repo}/pulls/{pull_number})
+- pulls_update (PATCH /repos/{owner}/{repo}/pulls/{pull_number})
+- teams_get_legacy (GET /teams/{team_id})
+- teams_update_legacy (PATCH /teams/{team_id})
+- teams_delete_legacy (DELETE /teams/{team_id})
+- teams_list_pending_invitations_legacy (GET /teams/{team_id}/invitations)
+- teams_list_members_legacy (GET /teams/{team_id}/members)
+- teams_get_member_legacy (GET /teams/{team_id}/members/{username})
+- teams_add_member_legacy (PUT /teams/{team_id}/members/{username})
+- teams_remove_member_legacy (DELETE /teams/{team_id}/members/{username})
+- teams_get_membership_for_user_legacy (GET /teams/{team_id}/memberships/{username})
+- teams_add_or_update_membership_for_user_legacy (PUT /teams/{team_id}/memberships/{username})
+- Redundant examples:
+- apps_create_from_manifest (POST /app-manifests/{code}/conversions)
+- apps_get_webhook_config_for_app (GET /app/hook/config)
+- apps_update_webhook_config_for_app (PATCH /app/hook/config)
+- apps_list_webhook_deliveries (GET /app/hook/deliveries)
+- apps_get_webhook_delivery (GET /app/hook/deliveries/{delivery_id})
+- apps_redeliver_webhook_delivery (POST /app/hook/deliveries/{delivery_id}/attempts)
+- apps_list_installation_requests_for_authenticated_app (GET /app/installation-requests)
+- apps_revoke_installation_access_token (DELETE /installation/token)
+- licenses_get_all_commonly_used (GET /licenses)
+- markdown_render_raw (POST /markdown/raw)
+- apps_list_plans (GET /marketplace_listing/plans)
+- apps_list_plans_stubbed (GET /marketplace_listing/stubbed/plans)
+- activity_list_public_events_for_repo_network (GET /networks/{owner}/{repo}/events)
+- activity_mark_thread_as_done (DELETE /notifications/threads/{thread_id})
+- dependabot_set_repository_access_default_level (PUT /organizations/{org}/dependabot/repository-access/default-level)
+- Low-value examples:
+- meta_root (GET /)
+- code_security_attach_enterprise_configuration (POST /enterprises/{enterprise}/code-security/configurations/{configuration_id}/attach)
+- apps_list_accounts_for_plan (GET /marketplace_listing/plans/{plan_id}/accounts)
+- apps_list_accounts_for_plan_stubbed (GET /marketplace_listing/stubbed/plans/{plan_id}/accounts)
+- meta_get_octocat (GET /octocat)
+- actions_get_hosted_runners_machine_specs_for_org (GET /orgs/{org}/actions/hosted-runners/machine-sizes)
+- actions_list_self_hosted_runners_in_group_for_org (GET /orgs/{org}/actions/runner-groups/{runner_group_id}/runners)
+- actions_set_custom_labels_for_self_hosted_runner_for_org (PUT /orgs/{org}/actions/runners/{runner_id}/labels)
+- actions_remove_custom_label_from_self_hosted_runner_for_org (DELETE /orgs/{org}/actions/runners/{runner_id}/labels/{name})
+- actions_get_org_variable (GET /orgs/{org}/actions/variables/{name})
+- orgs_create_artifact_deployment_record (POST /orgs/{org}/artifacts/metadata/deployment-record)
+- orgs_set_cluster_deployment_records (POST /orgs/{org}/artifacts/metadata/deployment-record/cluster/{cluster})
+- orgs_create_artifact_storage_record (POST /orgs/{org}/artifacts/metadata/storage-record)
+- orgs_list_artifact_deployment_records (GET /orgs/{org}/artifacts/{subject_digest}/metadata/deployment-records)
+- orgs_list_artifact_storage_records (GET /orgs/{org}/artifacts/{subject_digest}/metadata/storage-records)
+
+## What the Optimizer Renamed or Improved
+| Method | Path | Before | After |
+|---|---|---|---|
+| GET | /advisories | security_advisories_list_global_advisories | search_security_advisories |
+| GET | /advisories/{ghsa_id} | security_advisories_get_global_advisory | get_security_advisory |
+| GET | /app | apps_get_authenticated | get_authenticated_app |
+| GET | /app/installations | apps_list_installations | list_app_installations |
+| GET | /app/installations/{installation_id} | apps_get_installation | get_app_installation |
+| DELETE | /app/installations/{installation_id} | apps_delete_installation | delete_app_installation |
+| POST | /app/installations/{installation_id}/access_tokens | apps_create_installation_access_token | create_installation_access_token |
+| PUT | /app/installations/{installation_id}/suspended | apps_suspend_installation | suspend_app_installation |
+| DELETE | /app/installations/{installation_id}/suspended | apps_unsuspend_installation | unsuspend_app_installation |
+| DELETE | /applications/{client_id}/grant | apps_delete_authorization | revoke_app_authorization |
+| POST | /applications/{client_id}/token | apps_check_token | check_oauth_token |
+| PATCH | /applications/{client_id}/token | apps_reset_token | reset_oauth_token |
+
+1. security_advisories_list_global_advisories: List global security advisories Lists all global security advisories that match the specified parameters. If no other parameters are defined, the request will return only GitHub-reviewed advisories that are not malware. By default, all responses will exclude...
+   search_security_advisories: Search global security advisories by various criteria, returning matching vulnerability reports and metadata.
+2. security_advisories_get_global_advisory: Get a global security advisory Gets a global security advisory using its GitHub Security Advisory (GHSA) identifier.
+   get_security_advisory: Get detailed information about a specific security advisory by its GHSA identifier.
+3. apps_get_authenticated: Get the authenticated app Returns the GitHub App associated with the authentication credentials used. To see how many app installations are associated with this GitHub App, see the `installations_count` in the response. For more details about your app's...
+   get_authenticated_app: Get details about the authenticated GitHub App, including installation count and configuration.
+4. apps_list_installations: List installations for the authenticated app The permissions the installation has are included under the `permissions` key. You must use a...
+   list_app_installations: List all installations of the authenticated GitHub App, returning installation details and permissions.
+5. apps_get_installation: Get an installation for the authenticated app Enables an authenticated GitHub App to find an installation's information using the installation id. You must use a...
+   get_app_installation: Get detailed information about a specific app installation by its ID.
+6. apps_delete_installation: Delete an installation for the authenticated app Uninstalls a GitHub App on a user, organization, or enterprise account. If you prefer to temporarily suspend an app's access to your account's resources, then we recommend the "[Suspend an app...
+   delete_app_installation: Delete a GitHub App installation by ID and return confirmation
+7. apps_create_installation_access_token: Create an installation access token for an app Creates an installation access token that enables a GitHub App to make authenticated API requests for the app's installation on an organization or individual account. Installation tokens expire one hour from the...
+   create_installation_access_token: Create an installation access token for a GitHub App with optional repository and permission scoping
+8. apps_suspend_installation: Suspend an app installation Suspends a GitHub App on a user, organization, or enterprise account, which blocks the app from accessing the account's resources. When a GitHub App is suspended, the app's access to the GitHub API or webhook events is blocked for...
+   suspend_app_installation: Suspend a GitHub App installation to block access to resources
+9. apps_unsuspend_installation: Unsuspend an app installation Removes a GitHub App installation suspension. You must use a [JWT](https://docs.github.com/apps/building-github-apps/authenticating-with-github-apps/#authenticating-as-a-github-app) to access this endpoint.
+   unsuspend_app_installation: Remove suspension from a GitHub App installation to restore access
+10. apps_delete_authorization: Delete an app authorization OAuth and GitHub application owners can revoke a grant for their application and a specific user. You must provide a valid OAuth `access_token` as an input parameter and the grant for the token's owner will be deleted. Deleting an...
+   revoke_app_authorization: Revoke an OAuth authorization grant for a GitHub App using access token
+11. apps_check_token: Check a token OAuth applications and GitHub applications with OAuth authorizations can use this API method for checking OAuth token validity without exceeding the normal rate limits for failed login attempts. Authentication works differently with this...
+   check_oauth_token: Check validity of an OAuth token without exceeding rate limits
+12. apps_reset_token: Reset a token OAuth applications and GitHub applications with OAuth authorizations can use this API method to reset a valid OAuth token without end-user involvement. Applications must save the "token" property in the response because changes take effect...
+   reset_oauth_token: Reset an OAuth token and return a new token with same permissions
+
+## Issues / Weird Behavior
+- Optimization did not cover all 1,079 endpoints. maxEndpointsForOptimization limited the optimization scope to 200 endpoints before chunking.
+- Chunk retries were required (50 -> 25 -> 13/12) due chunk parse/size issues.
+- Final optimized output (108 tools) is high quality for the selected subset, but not a complete curation of the full API.

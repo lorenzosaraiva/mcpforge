@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
-import type { MCPForgeIR } from "../parser/types.js";
+import type { MCPForgeIR, ToolDefinition } from "../parser/types.js";
 import type { OptimizationOptions, OptimizationResult } from "./types.js";
 
 const ToolPrioritySchema = z.enum(["high", "medium", "low"]);
@@ -162,23 +162,122 @@ function buildOptimizationPrompt(ir: MCPForgeIR): string {
   ].join("\n");
 }
 
-export async function optimizeIRWithAI(
-  ir: MCPForgeIR,
-  options: OptimizationOptions = {},
-): Promise<OptimizationResult> {
-  const logger = options.logger ?? defaultLogger;
-  const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+const DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION = 200;
+const DEFAULT_OPTIMIZATION_CHUNK_SIZE = 50;
+const DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS = [
+  "payments",
+  "payment",
+  "customers",
+  "customer",
+  "subscriptions",
+  "subscription",
+  "invoices",
+  "invoice",
+  "charges",
+  "charge",
+  "refunds",
+  "refund",
+];
 
-  if (!apiKey) {
-    logger("[mcpforge] ANTHROPIC_API_KEY not found. Skipping AI optimization.");
-    return {
-      optimizedIR: ir,
-      skipped: true,
-      reason: "ANTHROPIC_API_KEY not configured",
-    };
+function normalizeText(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function scoreToolByPreferredTags(tool: ToolDefinition, preferredTags: string[]): number {
+  const toolTags = tool.tags.map((tag) => normalizeText(tag));
+  const name = normalizeText(tool.name);
+  const path = normalizeText(tool.path);
+
+  let score = 0;
+  for (const preferredTag of preferredTags) {
+    if (toolTags.some((tag) => tag.includes(preferredTag))) {
+      score += 10;
+    }
+    if (name.includes(preferredTag)) {
+      score += 6;
+    }
+    if (path.includes(preferredTag)) {
+      score += 4;
+    }
   }
 
-  const client = new Anthropic({ apiKey });
+  return score;
+}
+
+function selectToolsForOptimization(
+  ir: MCPForgeIR,
+  options: OptimizationOptions,
+  logger: (message: string) => void,
+): ToolDefinition[] {
+  const maxEndpointsForOptimization = options.maxEndpointsForOptimization ?? DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION;
+  if (maxEndpointsForOptimization <= 0 || ir.tools.length <= maxEndpointsForOptimization) {
+    return ir.tools;
+  }
+
+  const preferredTags = (options.preferredTagsForOptimization ?? DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS).map((tag) =>
+    normalizeText(tag),
+  );
+  const scored = ir.tools.map((tool, index) => ({
+    tool,
+    index,
+    score: scoreToolByPreferredTags(tool, preferredTags),
+  }));
+
+  const hasMeaningfulScores = scored.some((entry) => entry.score > 0);
+  let selected: ToolDefinition[];
+
+  if (hasMeaningfulScores) {
+    selected = scored
+      .slice()
+      .sort((left, right) => right.score - left.score || left.index - right.index)
+      .slice(0, maxEndpointsForOptimization)
+      .map((entry) => entry.tool);
+    logger(
+      `[mcpforge] Large API detected (${ir.tools.length} tools). Limiting optimization scope to ${selected.length} tools prioritized by tags: ${preferredTags.join(", ")}.`,
+    );
+  } else {
+    selected = ir.tools.slice(0, maxEndpointsForOptimization);
+    logger(
+      `[mcpforge] Large API detected (${ir.tools.length} tools). Limiting optimization scope to first ${selected.length} tools.`,
+    );
+  }
+
+  return selected;
+}
+
+function isContextLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("prompt is too long") ||
+    message.includes("too many tokens") ||
+    message.includes("context length") ||
+    message.includes("maximum context") ||
+    message.includes("token limit")
+  );
+}
+
+function isRecoverableChunkError(error: unknown): boolean {
+  if (isContextLimitError(error)) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("failed to parse optimizer json response") ||
+    message.includes("unterminated string") ||
+    message.includes("unexpected end of json input")
+  );
+}
+
+function isRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return message.includes("rate limit");
+}
+
+async function optimizeSingleIR(
+  client: Anthropic,
+  ir: MCPForgeIR,
+  options: OptimizationOptions,
+): Promise<MCPForgeIR> {
   const prompt = buildOptimizationPrompt(ir);
 
   const response = await client.messages.create({
@@ -220,9 +319,135 @@ export async function optimizeIRWithAI(
   if (validated.rawEndpointCount <= 0) {
     validated.rawEndpointCount = ir.rawEndpointCount;
   }
+  return validated;
+}
+
+function splitIntoChunks<T>(items: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+function dedupeToolNames(tools: ToolDefinition[]): ToolDefinition[] {
+  const counts = new Map<string, number>();
+  return tools.map((tool) => {
+    const seen = counts.get(tool.name) ?? 0;
+    counts.set(tool.name, seen + 1);
+    if (seen === 0) {
+      return tool;
+    }
+    return {
+      ...tool,
+      name: `${tool.name}_${seen + 1}`,
+    };
+  });
+}
+
+async function optimizeChunkRecursively(
+  client: Anthropic,
+  baseIR: MCPForgeIR,
+  tools: ToolDefinition[],
+  options: OptimizationOptions,
+  logger: (message: string) => void,
+  retryCount = 0,
+): Promise<ToolDefinition[]> {
+  const chunkIR: MCPForgeIR = {
+    ...baseIR,
+    tools,
+  };
+
+  try {
+    const optimizedChunk = await optimizeSingleIR(client, chunkIR, options);
+    return optimizedChunk.tools;
+  } catch (error) {
+    if (isRateLimitError(error) && retryCount < 2) {
+      logger(
+        `[mcpforge] Rate limit hit while optimizing chunk size ${tools.length}. Waiting 65s before retry ${retryCount + 1}/2.`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 65000));
+      return optimizeChunkRecursively(client, baseIR, tools, options, logger, retryCount + 1);
+    }
+
+    if (tools.length > 1 && isRecoverableChunkError(error)) {
+      const middle = Math.ceil(tools.length / 2);
+      logger(
+        `[mcpforge] Optimizer chunk failed for size ${tools.length}. Retrying with chunks of ${middle} and ${tools.length - middle}.`,
+      );
+      const left = await optimizeChunkRecursively(
+        client,
+        baseIR,
+        tools.slice(0, middle),
+        options,
+        logger,
+        0,
+      );
+      const right = await optimizeChunkRecursively(
+        client,
+        baseIR,
+        tools.slice(middle),
+        options,
+        logger,
+        0,
+      );
+      return [...left, ...right];
+    }
+    throw error;
+  }
+}
+
+export async function optimizeIRWithAI(
+  ir: MCPForgeIR,
+  options: OptimizationOptions = {},
+): Promise<OptimizationResult> {
+  const logger = options.logger ?? defaultLogger;
+  const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    logger("[mcpforge] ANTHROPIC_API_KEY not found. Skipping AI optimization.");
+    return {
+      optimizedIR: ir,
+      skipped: true,
+      reason: "ANTHROPIC_API_KEY not configured",
+    };
+  }
+
+  const client = new Anthropic({ apiKey });
+  const selectedTools = selectToolsForOptimization(ir, options, logger);
+  const scopedIR: MCPForgeIR = {
+    ...ir,
+    tools: selectedTools,
+  };
+
+  const optimizationChunkSize = options.optimizationChunkSize ?? DEFAULT_OPTIMIZATION_CHUNK_SIZE;
+  if (selectedTools.length <= optimizationChunkSize) {
+    const optimizedIR = await optimizeSingleIR(client, scopedIR, options);
+    optimizedIR.rawEndpointCount = ir.rawEndpointCount;
+    return {
+      optimizedIR,
+      skipped: false,
+    };
+  }
+
+  logger(
+    `[mcpforge] Running chunked optimization: ${selectedTools.length} tools split in chunks of ${optimizationChunkSize}.`,
+  );
+  const chunks = splitIntoChunks(selectedTools, optimizationChunkSize);
+  const optimizedTools: ToolDefinition[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index] ?? [];
+    logger(`[mcpforge] Optimizing chunk ${index + 1}/${chunks.length} (${chunk.length} tools).`);
+    const chunkTools = await optimizeChunkRecursively(client, scopedIR, chunk, options, logger);
+    optimizedTools.push(...chunkTools);
+  }
 
   return {
-    optimizedIR: validated,
+    optimizedIR: {
+      ...ir,
+      tools: dedupeToolNames(optimizedTools),
+      rawEndpointCount: ir.rawEndpointCount,
+    },
     skipped: false,
   };
 }

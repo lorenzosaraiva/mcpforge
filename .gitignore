@@ -7,4 +7,5 @@ coverage/
 !.env.example
 examples/*
 !examples/.gitkeep
+!examples/*.md
 mcp-server-*/

@@ -20,6 +20,10 @@ interface MCPForgeConfig {
   ir: MCPForgeIR;
 }
 
+function isNonInteractiveRuntime(): boolean {
+  return process.env.MCPFORGE_NON_INTERACTIVE === "1" || !process.stdin.isTTY || !process.stdout.isTTY;
+}
+
 function summarizeTools(ir: MCPForgeIR): string {
   const lines = ir.tools.map(
     (tool, index) =>
@@ -70,7 +74,9 @@ export function registerInitCommand(program: Command): void {
 
       const wantsOptimization =
         options.optimize ??
-        (await promptConfirm("Would you like AI to optimize the tools for LLM usage?", true));
+        (isNonInteractiveRuntime()
+          ? false
+          : await promptConfirm("Would you like AI to optimize the tools for LLM usage?", true));
 
       let finalIR = parsedIR;
       let optimized = false;

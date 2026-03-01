@@ -1,0 +1,810 @@
+# Optimizer Report: Stripe API
+
+## API Summary
+- API name: Stripe API
+- Total endpoints in spec: 587
+- Notes: Direct optimized dry-run hit a rate limit; workaround run used endpoint pre-filtering.
+
+## Tools WITHOUT Optimization
+- Count: 587
+
+- get_account
+- post_account_links
+- post_account_sessions
+- get_accounts
+- post_accounts
+- delete_accounts_account
+- get_accounts_account
+- post_accounts_account
+- post_accounts_account_bank_accounts
+- delete_accounts_account_bank_accounts_id
+- get_accounts_account_bank_accounts_id
+- post_accounts_account_bank_accounts_id
+- get_accounts_account_capabilities
+- get_accounts_account_capabilities_capability
+- post_accounts_account_capabilities_capability
+- get_accounts_account_external_accounts
+- post_accounts_account_external_accounts
+- delete_accounts_account_external_accounts_id
+- get_accounts_account_external_accounts_id
+- post_accounts_account_external_accounts_id
+- post_accounts_account_login_links
+- get_accounts_account_people
+- post_accounts_account_people
+- delete_accounts_account_people_person
+- get_accounts_account_people_person
+- post_accounts_account_people_person
+- get_accounts_account_persons
+- post_accounts_account_persons
+- delete_accounts_account_persons_person
+- get_accounts_account_persons_person
+- post_accounts_account_persons_person
+- post_accounts_account_reject
+- get_apple_pay_domains
+- post_apple_pay_domains
+- delete_apple_pay_domains_domain
+- get_apple_pay_domains_domain
+- get_application_fees
+- get_application_fees_fee_refunds_id
+- post_application_fees_fee_refunds_id
+- get_application_fees_id
+- post_application_fees_id_refund
+- get_application_fees_id_refunds
+- post_application_fees_id_refunds
+- get_apps_secrets
+- post_apps_secrets
+- post_apps_secrets_delete
+- get_apps_secrets_find
+- get_balance
+- get_balance_history
+- get_balance_history_id
+- get_balance_settings
+- post_balance_settings
+- get_balance_transactions
+- get_balance_transactions_id
+- get_billing_alerts
+- post_billing_alerts
+- get_billing_alerts_id
+- post_billing_alerts_id_activate
+- post_billing_alerts_id_archive
+- post_billing_alerts_id_deactivate
+- get_billing_credit_balance_summary
+- get_billing_credit_balance_transactions
+- get_billing_credit_balance_transactions_id
+- get_billing_credit_grants
+- post_billing_credit_grants
+- get_billing_credit_grants_id
+- post_billing_credit_grants_id
+- post_billing_credit_grants_id_expire
+- post_billing_credit_grants_id_void
+- post_billing_meter_event_adjustments
+- post_billing_meter_events
+- get_billing_meters
+- post_billing_meters
+- get_billing_meters_id
+- post_billing_meters_id
+- post_billing_meters_id_deactivate
+- get_billing_meters_id_event_summaries
+- post_billing_meters_id_reactivate
+- get_billing_portal_configurations
+- post_billing_portal_configurations
+- get_billing_portal_configurations_configuration
+- post_billing_portal_configurations_configuration
+- post_billing_portal_sessions
+- get_charges
+- post_charges
+- get_charges_search
+- get_charges_charge
+- post_charges_charge
+- post_charges_charge_capture
+- get_charges_charge_dispute
+- post_charges_charge_dispute
+- post_charges_charge_dispute_close
+- post_charges_charge_refund
+- get_charges_charge_refunds
+- post_charges_charge_refunds
+- get_charges_charge_refunds_refund
+- post_charges_charge_refunds_refund
+- get_checkout_sessions
+- post_checkout_sessions
+- get_checkout_sessions_session
+- post_checkout_sessions_session
+- post_checkout_sessions_session_expire
+- get_checkout_sessions_session_line_items
+- get_climate_orders
+- post_climate_orders
+- get_climate_orders_order
+- post_climate_orders_order
+- post_climate_orders_order_cancel
+- get_climate_products
+- get_climate_products_product
+- get_climate_suppliers
+- get_climate_suppliers_supplier
+- get_confirmation_tokens_confirmation_token
+- get_country_specs
+- get_country_specs_country
+- get_coupons
+- post_coupons
+- delete_coupons_coupon
+- get_coupons_coupon
+- post_coupons_coupon
+- get_credit_notes
+- post_credit_notes
+- get_credit_notes_preview
+- get_credit_notes_preview_lines
+- get_credit_notes_credit_note_lines
+- get_credit_notes_id
+- post_credit_notes_id
+- post_credit_notes_id_void
+- post_customer_sessions
+- get_customers
+- post_customers
+- get_customers_search
+- delete_customers_customer
+- get_customers_customer
+- post_customers_customer
+- get_customers_customer_balance_transactions
+- post_customers_customer_balance_transactions
+- get_customers_customer_balance_transactions_transaction
+- post_customers_customer_balance_transactions_transaction
+- get_customers_customer_bank_accounts
+- post_customers_customer_bank_accounts
+- delete_customers_customer_bank_accounts_id
+- get_customers_customer_bank_accounts_id
+- post_customers_customer_bank_accounts_id
+- post_customers_customer_bank_accounts_id_verify
+- get_customers_customer_cards
+- post_customers_customer_cards
+- delete_customers_customer_cards_id
+- get_customers_customer_cards_id
+- post_customers_customer_cards_id
+- get_customers_customer_cash_balance
+- post_customers_customer_cash_balance
+- get_customers_customer_cash_balance_transactions
+- get_customers_customer_cash_balance_transactions_transaction
+- delete_customers_customer_discount
+- get_customers_customer_discount
+- post_customers_customer_funding_instructions
+- get_customers_customer_payment_methods
+- get_customers_customer_payment_methods_payment_method
+- get_customers_customer_sources
+- post_customers_customer_sources
+- delete_customers_customer_sources_id
+- get_customers_customer_sources_id
+- post_customers_customer_sources_id
+- post_customers_customer_sources_id_verify
+- get_customers_customer_subscriptions
+- post_customers_customer_subscriptions
+- delete_customers_customer_subscriptions_subscription_exposed_id
+- get_customers_customer_subscriptions_subscription_exposed_id
+- post_customers_customer_subscriptions_subscription_exposed_id
+- delete_customers_customer_subscriptions_subscription_exposed_id_discount
+- get_customers_customer_subscriptions_subscription_exposed_id_discount
+- get_customers_customer_tax_ids
+- post_customers_customer_tax_ids
+- delete_customers_customer_tax_ids_id
+- get_customers_customer_tax_ids_id
+- get_disputes
+- get_disputes_dispute
+- post_disputes_dispute
+- post_disputes_dispute_close
+- get_entitlements_active_entitlements
+- get_entitlements_active_entitlements_id
+- get_entitlements_features
+- post_entitlements_features
+- get_entitlements_features_id
+- post_entitlements_features_id
+- post_ephemeral_keys
+- delete_ephemeral_keys_key
+- get_events
+- get_events_id
+- get_exchange_rates
+- get_exchange_rates_rate_id
+- post_external_accounts_id
+- get_file_links
+- post_file_links
+- get_file_links_link
+- post_file_links_link
+- get_files
+- post_files
+- get_files_file
+- get_financial_connections_accounts
+- get_financial_connections_accounts_account
+- post_financial_connections_accounts_account_disconnect
+- get_financial_connections_accounts_account_owners
+- post_financial_connections_accounts_account_refresh
+- post_financial_connections_accounts_account_subscribe
+- post_financial_connections_accounts_account_unsubscribe
+- post_financial_connections_sessions
+- get_financial_connections_sessions_session
+- get_financial_connections_transactions
+- get_financial_connections_transactions_transaction
+- get_forwarding_requests
+- post_forwarding_requests
+- get_forwarding_requests_id
+- get_identity_verification_reports
+- get_identity_verification_reports_report
+- get_identity_verification_sessions
+- post_identity_verification_sessions
+- get_identity_verification_sessions_session
+- post_identity_verification_sessions_session
+- post_identity_verification_sessions_session_cancel
+- post_identity_verification_sessions_session_redact
+- get_invoice_payments
+- get_invoice_payments_invoice_payment
+- get_invoice_rendering_templates
+- get_invoice_rendering_templates_template
+- post_invoice_rendering_templates_template_archive
+- post_invoice_rendering_templates_template_unarchive
+- get_invoiceitems
+- post_invoiceitems
+- delete_invoiceitems_invoiceitem
+- get_invoiceitems_invoiceitem
+- post_invoiceitems_invoiceitem
+- get_invoices
+- post_invoices
+- post_invoices_create_preview
+- get_invoices_search
+- delete_invoices_invoice
+- get_invoices_invoice
+- post_invoices_invoice
+- post_invoices_invoice_add_lines
+- post_invoices_invoice_attach_payment
+- post_invoices_invoice_finalize
+- get_invoices_invoice_lines
+- post_invoices_invoice_lines_line_item_id
+- post_invoices_invoice_mark_uncollectible
+- post_invoices_invoice_pay
+- post_invoices_invoice_remove_lines
+- post_invoices_invoice_send
+- post_invoices_invoice_update_lines
+- post_invoices_invoice_void
+- get_issuing_authorizations
+- get_issuing_authorizations_authorization
+- post_issuing_authorizations_authorization
+- post_issuing_authorizations_authorization_approve
+- post_issuing_authorizations_authorization_decline
+- get_issuing_cardholders
+- post_issuing_cardholders
+- get_issuing_cardholders_cardholder
+- post_issuing_cardholders_cardholder
+- get_issuing_cards
+- post_issuing_cards
+- get_issuing_cards_card
+- post_issuing_cards_card
+- get_issuing_disputes
+- post_issuing_disputes
+- get_issuing_disputes_dispute
+- post_issuing_disputes_dispute
+- post_issuing_disputes_dispute_submit
+- get_issuing_personalization_designs
+- post_issuing_personalization_designs
+- get_issuing_personalization_designs_personalization_design
+- post_issuing_personalization_designs_personalization_design
+- get_issuing_physical_bundles
+- get_issuing_physical_bundles_physical_bundle
+- get_issuing_settlements_settlement
+- post_issuing_settlements_settlement
+- get_issuing_tokens
+- get_issuing_tokens_token
+- post_issuing_tokens_token
+- get_issuing_transactions
+- get_issuing_transactions_transaction
+- post_issuing_transactions_transaction
+- post_link_account_sessions
+- get_link_account_sessions_session
+- get_linked_accounts
+- get_linked_accounts_account
+- post_linked_accounts_account_disconnect
+- get_linked_accounts_account_owners
+- post_linked_accounts_account_refresh
+- get_mandates_mandate
+- get_payment_attempt_records
+- get_payment_attempt_records_id
+- get_payment_intents
+- post_payment_intents
+- get_payment_intents_search
+- get_payment_intents_intent
+- post_payment_intents_intent
+- get_payment_intents_intent_amount_details_line_items
+- post_payment_intents_intent_apply_customer_balance
+- post_payment_intents_intent_cancel
+- post_payment_intents_intent_capture
+- post_payment_intents_intent_confirm
+- post_payment_intents_intent_increment_authorization
+- post_payment_intents_intent_verify_microdeposits
+- get_payment_links
+- post_payment_links
+- get_payment_links_payment_link
+- post_payment_links_payment_link
+- get_payment_links_payment_link_line_items
+- get_payment_method_configurations
+- post_payment_method_configurations
+- get_payment_method_configurations_configuration
+- post_payment_method_configurations_configuration
+- get_payment_method_domains
+- post_payment_method_domains
+- get_payment_method_domains_payment_method_domain
+- post_payment_method_domains_payment_method_domain
+- post_payment_method_domains_payment_method_domain_validate
+- get_payment_methods
+- post_payment_methods
+- get_payment_methods_payment_method
+- post_payment_methods_payment_method
+- post_payment_methods_payment_method_attach
+- post_payment_methods_payment_method_detach
+- post_payment_records_report_payment
+- get_payment_records_id
+- post_payment_records_id_report_payment_attempt
+- post_payment_records_id_report_payment_attempt_canceled
+- post_payment_records_id_report_payment_attempt_failed
+- post_payment_records_id_report_payment_attempt_guaranteed
+- post_payment_records_id_report_payment_attempt_informational
+- post_payment_records_id_report_refund
+- get_payouts
+- post_payouts
+- get_payouts_payout
+- post_payouts_payout
+- post_payouts_payout_cancel
+- post_payouts_payout_reverse
+- get_plans
+- post_plans
+- delete_plans_plan
+- get_plans_plan
+- post_plans_plan
+- get_prices
+- post_prices
+- get_prices_search
+- get_prices_price
+- post_prices_price
+- get_products
+- post_products
+- get_products_search
+- delete_products_id
+- get_products_id
+- post_products_id
+- get_products_product_features
+- post_products_product_features
+- delete_products_product_features_id
+- get_products_product_features_id
+- get_promotion_codes
+- post_promotion_codes
+- get_promotion_codes_promotion_code
+- post_promotion_codes_promotion_code
+- get_quotes
+- post_quotes
+- get_quotes_quote
+- post_quotes_quote
+- post_quotes_quote_accept
+- post_quotes_quote_cancel
+- get_quotes_quote_computed_upfront_line_items
+- post_quotes_quote_finalize
+- get_quotes_quote_line_items
+- get_quotes_quote_pdf
+- get_radar_early_fraud_warnings
+- get_radar_early_fraud_warnings_early_fraud_warning
+- post_radar_payment_evaluations
+- get_radar_value_list_items
+- post_radar_value_list_items
+- delete_radar_value_list_items_item
+- get_radar_value_list_items_item
+- get_radar_value_lists
+- post_radar_value_lists
+- delete_radar_value_lists_value_list
+- get_radar_value_lists_value_list
+- post_radar_value_lists_value_list
+- get_refunds
+- post_refunds
+- get_refunds_refund
+- post_refunds_refund
+- post_refunds_refund_cancel
+- get_reporting_report_runs
+- post_reporting_report_runs
+- get_reporting_report_runs_report_run
+- get_reporting_report_types
+- get_reporting_report_types_report_type
+- get_reviews
+- get_reviews_review
+- post_reviews_review_approve
+- get_setup_attempts
+- get_setup_intents
+- post_setup_intents
+- get_setup_intents_intent
+- post_setup_intents_intent
+- post_setup_intents_intent_cancel
+- post_setup_intents_intent_confirm
+- post_setup_intents_intent_verify_microdeposits
+- get_shipping_rates
+- post_shipping_rates
+- get_shipping_rates_shipping_rate_token
+- post_shipping_rates_shipping_rate_token
+- post_sigma_saved_queries_id
+- get_sigma_scheduled_query_runs
+- get_sigma_scheduled_query_runs_scheduled_query_run
+- post_sources
+- get_sources_source
+- post_sources_source
+- get_sources_source_mandate_notifications_mandate_notification
+- get_sources_source_source_transactions
+- get_sources_source_source_transactions_source_transaction
+- post_sources_source_verify
+- get_subscription_items
+- post_subscription_items
+- delete_subscription_items_item
+- get_subscription_items_item
+- post_subscription_items_item
+- get_subscription_schedules
+- post_subscription_schedules
+- get_subscription_schedules_schedule
+- post_subscription_schedules_schedule
+- post_subscription_schedules_schedule_cancel
+- post_subscription_schedules_schedule_release
+- get_subscriptions
+- post_subscriptions
+- get_subscriptions_search
+- delete_subscriptions_subscription_exposed_id
+- get_subscriptions_subscription_exposed_id
+- post_subscriptions_subscription_exposed_id
+- delete_subscriptions_subscription_exposed_id_discount
+- post_subscriptions_subscription_migrate
+- post_subscriptions_subscription_resume
+- get_tax_associations_find
+- post_tax_calculations
+- get_tax_calculations_calculation
+- get_tax_calculations_calculation_line_items
+- get_tax_registrations
+- post_tax_registrations
+- get_tax_registrations_id
+- post_tax_registrations_id
+- get_tax_settings
+- post_tax_settings
+- post_tax_transactions_create_from_calculation
+- post_tax_transactions_create_reversal
+- get_tax_transactions_transaction
+- get_tax_transactions_transaction_line_items
+- get_tax_codes
+- get_tax_codes_id
+- get_tax_ids
+- post_tax_ids
+- delete_tax_ids_id
+- get_tax_ids_id
+- get_tax_rates
+- post_tax_rates
+- get_tax_rates_tax_rate
+- post_tax_rates_tax_rate
+- get_terminal_configurations
+- post_terminal_configurations
+- delete_terminal_configurations_configuration
+- get_terminal_configurations_configuration
+- post_terminal_configurations_configuration
+- post_terminal_connection_tokens
+- get_terminal_locations
+- post_terminal_locations
+- delete_terminal_locations_location
+- get_terminal_locations_location
+- post_terminal_locations_location
+- post_terminal_onboarding_links
+- get_terminal_readers
+- post_terminal_readers
+- delete_terminal_readers_reader
+- get_terminal_readers_reader
+- post_terminal_readers_reader
+- post_terminal_readers_reader_cancel_action
+- post_terminal_readers_reader_collect_inputs
+- post_terminal_readers_reader_collect_payment_method
+- post_terminal_readers_reader_confirm_payment_intent
+- post_terminal_readers_reader_process_payment_intent
+- post_terminal_readers_reader_process_setup_intent
+- post_terminal_readers_reader_refund_payment
+- post_terminal_readers_reader_set_reader_display
+- post_terminal_refunds
+- post_test_helpers_confirmation_tokens
+- post_test_helpers_customers_customer_fund_cash_balance
+- post_test_helpers_issuing_authorizations
+- post_test_helpers_issuing_authorizations_authorization_capture
+- post_test_helpers_issuing_authorizations_authorization_expire
+- post_test_helpers_issuing_authorizations_authorization_finalize_amount
+- post_test_helpers_issuing_authorizations_authorization_fraud_challenges_respond
+- post_test_helpers_issuing_authorizations_authorization_increment
+- post_test_helpers_issuing_authorizations_authorization_reverse
+- post_test_helpers_issuing_cards_card_shipping_deliver
+- post_test_helpers_issuing_cards_card_shipping_fail
+- post_test_helpers_issuing_cards_card_shipping_return
+- post_test_helpers_issuing_cards_card_shipping_ship
+- post_test_helpers_issuing_cards_card_shipping_submit
+- post_test_helpers_issuing_personalization_designs_personalization_design_activate
+- post_test_helpers_issuing_personalization_designs_personalization_design_deactivate
+- post_test_helpers_issuing_personalization_designs_personalization_design_reject
+- post_test_helpers_issuing_settlements
+- post_test_helpers_issuing_settlements_settlement_complete
+- post_test_helpers_issuing_transactions_create_force_capture
+- post_test_helpers_issuing_transactions_create_unlinked_refund
+- post_test_helpers_issuing_transactions_transaction_refund
+- post_test_helpers_refunds_refund_expire
+- post_test_helpers_terminal_readers_reader_present_payment_method
+- post_test_helpers_terminal_readers_reader_succeed_input_collection
+- post_test_helpers_terminal_readers_reader_timeout_input_collection
+- get_test_helpers_test_clocks
+- post_test_helpers_test_clocks
+- delete_test_helpers_test_clocks_test_clock
+- get_test_helpers_test_clocks_test_clock
+- post_test_helpers_test_clocks_test_clock_advance
+- post_test_helpers_treasury_inbound_transfers_id_fail
+- post_test_helpers_treasury_inbound_transfers_id_return
+- post_test_helpers_treasury_inbound_transfers_id_succeed
+- post_test_helpers_treasury_outbound_payments_id
+- post_test_helpers_treasury_outbound_payments_id_fail
+- post_test_helpers_treasury_outbound_payments_id_post
+- post_test_helpers_treasury_outbound_payments_id_return
+- post_test_helpers_treasury_outbound_transfers_outbound_transfer
+- post_test_helpers_treasury_outbound_transfers_outbound_transfer_fail
+- post_test_helpers_treasury_outbound_transfers_outbound_transfer_post
+- post_test_helpers_treasury_outbound_transfers_outbound_transfer_return
+- post_test_helpers_treasury_received_credits
+- post_test_helpers_treasury_received_debits
+- post_tokens
+- get_tokens_token
+- get_topups
+- post_topups
+- get_topups_topup
+- post_topups_topup
+- post_topups_topup_cancel
+- get_transfers
+- post_transfers
+- get_transfers_id_reversals
+- post_transfers_id_reversals
+- get_transfers_transfer
+- post_transfers_transfer
+- get_transfers_transfer_reversals_id
+- post_transfers_transfer_reversals_id
+- get_treasury_credit_reversals
+- post_treasury_credit_reversals
+- get_treasury_credit_reversals_credit_reversal
+- get_treasury_debit_reversals
+- post_treasury_debit_reversals
+- get_treasury_debit_reversals_debit_reversal
+- get_treasury_financial_accounts
+- post_treasury_financial_accounts
+- get_treasury_financial_accounts_financial_account
+- post_treasury_financial_accounts_financial_account
+- post_treasury_financial_accounts_financial_account_close
+- get_treasury_financial_accounts_financial_account_features
+- post_treasury_financial_accounts_financial_account_features
+- get_treasury_inbound_transfers
+- post_treasury_inbound_transfers
+- get_treasury_inbound_transfers_id
+- post_treasury_inbound_transfers_inbound_transfer_cancel
+- get_treasury_outbound_payments
+- post_treasury_outbound_payments
+- get_treasury_outbound_payments_id
+- post_treasury_outbound_payments_id_cancel
+- get_treasury_outbound_transfers
+- post_treasury_outbound_transfers
+- get_treasury_outbound_transfers_outbound_transfer
+- post_treasury_outbound_transfers_outbound_transfer_cancel
+- get_treasury_received_credits
+- get_treasury_received_credits_id
+- get_treasury_received_debits
+- get_treasury_received_debits_id
+- get_treasury_transaction_entries
+- get_treasury_transaction_entries_id
+- get_treasury_transactions
+- get_treasury_transactions_id
+- get_webhook_endpoints
+- post_webhook_endpoints
+- delete_webhook_endpoints_webhook_endpoint
+- get_webhook_endpoints_webhook_endpoint
+- post_webhook_endpoints_webhook_endpoint
+
+## Tools WITH Optimization
+- Count: 100
+- Source: workaround optimizer run with maxEndpointsForOptimization: 100 and optimizationChunkSize: 10 (preferred tags for payments/customers/subscriptions/invoices/charges/refunds)
+
+- list_charge_refunds: List all refunds for a specific charge, returning refund details and pagination metadata
+- create_refund: Create a refund for a charge or payment intent, returning the refund object with status and amount details
+- get_refund: Retrieve details of a specific refund by ID, returning refund status, amount, and metadata
+- update_refund: Update a refund's metadata, returning the updated refund object
+- list_customer_subscriptions: List active subscriptions for a customer, returning subscription details and pagination metadata
+- create_subscription: Create a new subscription for a customer with specified items and billing settings, returning the subscription object
+- get_subscription: Retrieve details of a specific subscription by ID, returning subscription status, items, and billing information
+- update_subscription: Update an existing subscription's items, billing settings, or metadata, returning the updated subscription object
+- cancel_subscription: Cancel a customer's subscription immediately or at period end, returning the canceled subscription object
+- remove_subscription_discount: Remove the currently applied discount from a subscription, returning the deletion confirmation
+- get_subscription_discount: Retrieve the discount applied to a customer's subscription, returning discount details and coupon information.
+- refund_charge: Create a refund for a charge, returning refund details and updated charge status.
+- list_customer_payment_methods: List all payment methods for a customer, returning payment method details with pagination.
+- get_customer_payment_method: Retrieve a specific payment method for a customer, returning payment method details and status.
+- list_invoice_payments: List all payments for invoices with optional filtering, returning payment details and pagination.
+- get_invoice_payment: Retrieve a specific invoice payment by ID, returning payment details and associated invoice information.
+- attach_payment_to_invoice: Attach a PaymentIntent or payment record to an invoice, returning updated invoice with payment details.
+- get_application_fee_refund: Retrieve a specific application fee refund, returning refund details and status.
+- update_application_fee_refund: Update metadata for an application fee refund, returning updated refund details.
+- list_application_fee_refunds: List all refunds for a specific application fee, returning refund details with pagination.
+- list_charges: List charges with optional filters, returning charge objects sorted by creation date with most recent first.
+- create_charge: Create a new charge (deprecated - use Payment Intents API instead), returning the charge object.
+- search_charges: Search charges using Stripe's query language, returning matching charge objects and pagination metadata.
+- get_charge: Retrieve a specific charge by ID, returning complete charge details including payment method and status.
+- update_charge: Update charge metadata, description, or customer association, returning the updated charge object.
+- capture_charge: Capture a previously authorized charge, returning the updated charge object with captured status.
+- get_charge_dispute: Retrieve dispute details for a specific charge, returning dispute object with evidence and status.
+- update_dispute: Submit evidence or update metadata for a charge dispute, returning the updated dispute object.
+- close_dispute: Close a dispute by accepting the chargeback, returning the updated dispute object with closed status.
+- refund_application_fee: Create a refund for an application fee, returning the refund object with amount and status details.
+- list_customers: List customers with optional filters, returning customer objects sorted by creation date with most recent first.
+- create_customer: Create a new customer with contact details and billing information, returning the created customer object.
+- search_customers: Search customers using Stripe's query language, returning matching customers and pagination metadata.
+- get_customer: Retrieve a specific customer by ID, returning profile details and account information.
+- update_customer: Update customer information by setting new values for specified fields, returning the updated customer object.
+- delete_customer: Permanently delete a customer and cancel all active subscriptions, returning deletion confirmation.
+- list_customer_balance_transactions: List transactions that updated a customer's credit balance, returning transaction history with pagination.
+- create_customer_balance_transaction: Create a transaction that updates a customer's credit balance, returning the created transaction.
+- get_customer_balance_transaction: Retrieve a specific customer balance transaction by ID, returning transaction details.
+- update_customer_balance_transaction: Update a customer balance transaction's description and metadata, returning the updated transaction.
+- list_customer_bank_accounts: List all bank accounts for a customer and return account details with pagination metadata
+- add_customer_bank_account: Add a new bank account to a customer and return the created account details
+- get_customer_bank_account: Retrieve a specific bank account for a customer and return account details
+- update_customer_bank_account: Update a customer's bank account details and return the updated account
+- delete_customer_bank_account: Delete a customer's bank account and return confirmation
+- verify_customer_bank_account: Verify a customer's bank account using microdeposit amounts and return verification status
+- list_customer_cards: List all cards for a customer and return card details with pagination metadata
+- add_customer_card: Add a new card to a customer and return the created card details
+- get_customer_card: Retrieve a specific card for a customer and return card details
+- delete_customer_card: Delete a customer's card and return confirmation
+- update_customer_card: Update a customer's payment card details including expiration date, billing address, and cardholder name, returning the updated card object.
+- get_customer_cash_balance: Retrieve a customer's current cash balance amount and settings, returning balance details and configuration.
+- update_customer_cash_balance_settings: Update a customer's cash balance reconciliation settings, returning the updated cash balance configuration.
+- list_customer_cash_balance_transactions: List all cash balance transactions for a customer with pagination, returning transaction history and metadata.
+- get_customer_cash_balance_transaction: Retrieve a specific cash balance transaction by ID, returning transaction details and amount changes.
+- remove_customer_discount: Remove the currently applied discount from a customer, returning confirmation of removal.
+- get_customer_discount: Retrieve the currently applied discount for a customer, returning discount details and expiration.
+- create_customer_funding_instructions: Create or retrieve funding instructions for a customer's cash balance, returning bank transfer details and account information.
+- list_customer_payment_sources: List all payment sources (cards, bank accounts) for a customer with filtering and pagination, returning source details.
+- add_customer_payment_source: Add a new payment source (card or bank account) to a customer using a token or raw details, returning the created source.
+- delete_customer_source: Delete a customer's payment source and return confirmation of removal
+- get_customer_source: Retrieve a customer's payment source details including type and status
+- update_customer_source: Update a customer's payment source details and return the modified source
+- verify_bank_account: Verify a customer's bank account using microdeposit amounts and return verification status
+- list_customer_tax_ids: List all tax IDs for a customer and return paginated results
+- create_customer_tax_id: Create a tax ID for a customer and return the new tax ID object with verification status
+- delete_customer_tax_id: Delete a customer's tax ID and return deletion confirmation
+- get_customer_tax_id: Retrieve a specific tax ID for a customer and return tax ID details and verification status
+- list_invoices: List invoices with optional filtering by customer, status, or date range, returning invoices sorted by creation date.
+- create_invoice: Create a draft invoice for a customer, returning the invoice object ready for finalization and payment.
+- create_invoice_preview: Create a preview of an upcoming invoice showing all pending charges, subscription renewals, and invoice items before finalizing
+- search_invoices: Search for invoices using Stripe's query language and return matching results with pagination
+- get_invoice: Retrieve a specific invoice by ID and return its complete details including line items and payment status
+- update_invoice: Update an invoice's details such as description, metadata, payment settings, and line items (only for draft invoices)
+- delete_draft_invoice: Permanently delete a draft invoice that has not been finalized or sent to customers
+- finalize_invoice: Finalize a draft invoice to make it ready for payment collection and prevent further modifications
+- get_invoice_line_items: Retrieve all line items for a specific invoice with pagination support
+- add_invoice_line_items: Add multiple line items to a draft invoice in bulk
+- update_invoice_line_item: Update a specific line item on an invoice including amount, description, quantity, and tax information
+- mark_invoice_uncollectible: Mark an invoice as uncollectible for accounting purposes to track bad debts that can be written off
+- pay_invoice: Process payment for an invoice and return payment status and invoice details
+- send_invoice: Send an invoice to customer for manual payment and return invoice details
+- void_invoice: Mark a finalized invoice as void and return updated invoice status
+- update_invoice_lines: Update multiple line items on a draft invoice and return updated invoice
+- remove_invoice_lines: Remove multiple line items from a draft invoice and return updated invoice
+- list_refunds: List all refunds with optional filters and return paginated refund data
+- create_refund_2: Create a new refund for a charge or payment intent and return refund details
+- get_refund_2: Retrieve details of an existing refund by ID
+- apply_customer_balance: Apply customer balance to a customer_balance PaymentIntent and return updated payment details
+- report_payment_refund: Report that a payment record was refunded and return updated payment record
+- update_refund_2: Update a refund's metadata and return the updated refund object.
+- cancel_refund: Cancel a refund with requires_action status and return the canceled refund object.
+- list_subscriptions: List subscriptions with optional filters and return paginated subscription data.
+- create_subscription_2: Create a new subscription for a customer and return the subscription object.
+- search_subscriptions: Search subscriptions using Stripe's query language and return matching results with pagination.
+- cancel_subscription_2: Cancel a subscription immediately and return the canceled subscription object.
+- get_subscription_2: Retrieve a subscription by ID and return the subscription object with details.
+- update_subscription_2: Update an existing subscription's parameters and return the modified subscription object.
+- remove_subscription_discount_2: Remove the currently applied discount from a subscription and return confirmation.
+- migrate_subscription_billing: Upgrade a subscription's billing mode to flexible and return the updated subscription.
+
+## What the Optimizer Removed and Why
+- Removed total: 486
+- Admin: 88
+- Deprecated: 4
+- Redundant: 305
+- Low-value: 89
+
+### Removed examples by category
+- Admin examples:
+- post_accounts (POST /v1/accounts)
+- get_accounts_account_capabilities (GET /v1/accounts/{account}/capabilities)
+- get_accounts_account_people (GET /v1/accounts/{account}/people)
+- get_accounts_account_persons (GET /v1/accounts/{account}/persons)
+- get_balance_settings (GET /v1/balance_settings)
+- post_balance_settings (POST /v1/balance_settings)
+- get_billing_alerts (GET /v1/billing/alerts)
+- post_billing_alerts (POST /v1/billing/alerts)
+- get_billing_alerts_id (GET /v1/billing/alerts/{id})
+- post_billing_alerts_id_activate (POST /v1/billing/alerts/{id}/activate)
+- post_billing_alerts_id_archive (POST /v1/billing/alerts/{id}/archive)
+- post_billing_alerts_id_deactivate (POST /v1/billing/alerts/{id}/deactivate)
+- get_billing_credit_balance_summary (GET /v1/billing/credit_balance_summary)
+- get_billing_credit_balance_transactions (GET /v1/billing/credit_balance_transactions)
+- get_billing_credit_balance_transactions_id (GET /v1/billing/credit_balance_transactions/{id})
+- Deprecated examples:
+- get_exchange_rates (GET /v1/exchange_rates)
+- get_exchange_rates_rate_id (GET /v1/exchange_rates/{rate_id})
+- post_issuing_authorizations_authorization_approve (POST /v1/issuing/authorizations/{authorization}/approve)
+- post_issuing_authorizations_authorization_decline (POST /v1/issuing/authorizations/{authorization}/decline)
+- Redundant examples:
+- get_account (GET /v1/account)
+- post_account_links (POST /v1/account_links)
+- post_account_sessions (POST /v1/account_sessions)
+- get_accounts (GET /v1/accounts)
+- delete_accounts_account (DELETE /v1/accounts/{account})
+- get_accounts_account (GET /v1/accounts/{account})
+- post_accounts_account (POST /v1/accounts/{account})
+- post_accounts_account_bank_accounts (POST /v1/accounts/{account}/bank_accounts)
+- post_accounts_account_capabilities_capability (POST /v1/accounts/{account}/capabilities/{capability})
+- get_accounts_account_external_accounts (GET /v1/accounts/{account}/external_accounts)
+- post_accounts_account_external_accounts (POST /v1/accounts/{account}/external_accounts)
+- post_accounts_account_login_links (POST /v1/accounts/{account}/login_links)
+- post_accounts_account_people (POST /v1/accounts/{account}/people)
+- delete_accounts_account_people_person (DELETE /v1/accounts/{account}/people/{person})
+- get_accounts_account_people_person (GET /v1/accounts/{account}/people/{person})
+- Low-value examples:
+- delete_accounts_account_bank_accounts_id (DELETE /v1/accounts/{account}/bank_accounts/{id})
+- get_accounts_account_bank_accounts_id (GET /v1/accounts/{account}/bank_accounts/{id})
+- post_accounts_account_bank_accounts_id (POST /v1/accounts/{account}/bank_accounts/{id})
+- get_accounts_account_capabilities_capability (GET /v1/accounts/{account}/capabilities/{capability})
+- delete_accounts_account_external_accounts_id (DELETE /v1/accounts/{account}/external_accounts/{id})
+- get_accounts_account_external_accounts_id (GET /v1/accounts/{account}/external_accounts/{id})
+- post_accounts_account_external_accounts_id (POST /v1/accounts/{account}/external_accounts/{id})
+- post_checkout_sessions_session_expire (POST /v1/checkout/sessions/{session}/expire)
+- post_climate_orders_order (POST /v1/climate/orders/{order})
+- get_country_specs (GET /v1/country_specs)
+- get_country_specs_country (GET /v1/country_specs/{country})
+- post_coupons_coupon (POST /v1/coupons/{coupon})
+- post_disputes_dispute_close (POST /v1/disputes/{dispute}/close)
+- post_entitlements_features_id (POST /v1/entitlements/features/{id})
+- get_events (GET /v1/events)
+
+## What the Optimizer Renamed or Improved
+| Method | Path | Before | After |
+|---|---|---|---|
+| GET | /v1/application_fees/{fee}/refunds/{id} | get_application_fees_fee_refunds_id | get_application_fee_refund |
+| POST | /v1/application_fees/{fee}/refunds/{id} | post_application_fees_fee_refunds_id | update_application_fee_refund |
+| GET | /v1/application_fees/{id}/refunds | post_application_fees_id_refund | list_application_fee_refunds |
+| GET | /v1/application_fees/{id}/refunds | get_application_fees_id_refunds | list_application_fee_refunds |
+| POST | /v1/application_fees/{id}/refunds | post_application_fees_id_refunds | refund_application_fee |
+| GET | /v1/charges | get_charges | list_charges |
+| POST | /v1/charges | post_charges | create_charge |
+| GET | /v1/charges/search | get_charges_search | search_charges |
+| GET | /v1/charges/{charge} | get_charges_charge | get_charge |
+| POST | /v1/charges/{charge} | post_charges_charge | update_charge |
+| POST | /v1/charges/{charge}/capture | post_charges_charge_capture | capture_charge |
+| GET | /v1/charges/{charge}/dispute | get_charges_charge_dispute | get_charge_dispute |
+
+1. get_application_fees_fee_refunds_id: Retrieve an application fee refund <p>By default, you can see the 10 most recent refunds stored directly on the application fee object, but you can also retrieve details about a specific refund stored on the application fee.</p>
+   get_application_fee_refund: Retrieve a specific application fee refund, returning refund details and status.
+2. post_application_fees_fee_refunds_id: Update an application fee refund <p>Updates the specified application fee refund by setting the values of the parameters passed. Any parameters not provided will be left unchanged.</p> <p>This request only accepts metadata as an argument.</p>
+   update_application_fee_refund: Update metadata for an application fee refund, returning updated refund details.
+3. post_application_fees_id_refund: List all application fee refunds <p>You can see a list of the refunds belonging to a specific application fee. Note that the 10 most recent refunds are always available by default on the application fee object. If you need more than those 10, you can use...
+   list_application_fee_refunds: List all refunds for a specific application fee, returning refund details with pagination.
+4. get_application_fees_id_refunds: List all application fee refunds <p>You can see a list of the refunds belonging to a specific application fee. Note that the 10 most recent refunds are always available by default on the application fee object. If you need more than those 10, you can use...
+   list_application_fee_refunds: List all refunds for a specific application fee, returning refund details with pagination.
+5. post_application_fees_id_refunds: Create an application fee refund <p>Refunds an application fee that has previously been collected but not yet refunded. Funds will be refunded to the Stripe account from which the fee was originally collected.</p> <p>You can optionally refund only part of an...
+   refund_application_fee: Create a refund for an application fee, returning the refund object with amount and status details.
+6. get_charges: List all charges <p>Returns a list of charges you’ve previously created. The charges are returned in sorted order, with the most recent charges appearing first.</p>
+   list_charges: List charges with optional filters, returning charge objects sorted by creation date with most recent first.
+7. post_charges: <p>This method is no longer recommended—use the <a href="/docs/api/payment_intents">Payment Intents API</a> to initiate a new payment instead. Confirmation of the PaymentIntent creates the <code>Charge</code> object used to request payment.</p>
+   create_charge: Create a new charge (deprecated - use Payment Intents API instead), returning the charge object.
+8. get_charges_search: Search charges <p>Search for charges you’ve previously created using Stripe’s <a href="/docs/search#search-query-language">Search Query Language</a>. Don’t use search in read-after-write flows where strict consistency is necessary. Under normal operating...
+   search_charges: Search charges using Stripe's query language, returning matching charge objects and pagination metadata.
+9. get_charges_charge: Retrieve a charge <p>Retrieves the details of a charge that has previously been created. Supply the unique charge ID that was returned from your previous request, and Stripe will return the corresponding charge information. The same information is returned...
+   get_charge: Retrieve a specific charge by ID, returning complete charge details including payment method and status.
+10. post_charges_charge: Update a charge <p>Updates the specified charge by setting the values of the parameters passed. Any parameters not provided will be left unchanged.</p>
+   update_charge: Update charge metadata, description, or customer association, returning the updated charge object.
+11. post_charges_charge_capture: Capture a payment <p>Capture the payment of an existing, uncaptured charge that was created with the <code>capture</code> option set to false.</p> <p>Uncaptured payments expire a set number of days after they are created (<a...
+   capture_charge: Capture a previously authorized charge, returning the updated charge object with captured status.
+12. get_charges_charge_dispute: <p>Retrieve a dispute for a specified charge.</p>
+   get_charge_dispute: Retrieve dispute details for a specific charge, returning dispute object with evidence and status.
+
+## Issues / Weird Behavior
+- Direct CLI optimize run failed with rate limit: node.exe : mcpforge failed: 429 {"type":"error","error":{"type":"rate_limit_error","message":"This request would 
+- Because Stripe is large, a pre-filtered optimization pass was required to finish reliably.
+- The optimized 100-tool result reflects the selected high-priority subset, not all 587 endpoints.
