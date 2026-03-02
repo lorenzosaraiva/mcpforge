@@ -43,6 +43,8 @@ Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI spec
   - Regenerate from `mcpforge.config.json` (use `--optimize` to re-run AI optimization).
 - `mcpforge inspect <spec>`
   - Print API summary, endpoint groups by tag, and quality warnings.
+- `mcpforge diff`
+  - Compare current spec against last generation and flag breaking changes with risk scoring.
 - `mcpforge test`
   - Placeholder command for upcoming testing workflows.
 

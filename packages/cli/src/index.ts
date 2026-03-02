@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 
+import { registerDiffCommand } from "./commands/diff.js";
 import { registerGenerateCommand } from "./commands/generate.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerInspectCommand } from "./commands/inspect.js";
@@ -17,6 +18,7 @@ program
 registerInitCommand(program);
 registerGenerateCommand(program);
 registerInspectCommand(program);
+registerDiffCommand(program);
 registerTestCommand(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {

@@ -6,3 +6,6 @@ export { optimizeIRWithAI } from "./optimizer/ai-optimizer.js";
 
 export * from "./generator/types.js";
 export { generateTypeScriptMCPServer } from "./generator/typescript-generator.js";
+
+export * from "./differ/ir-differ.js";
+export { diffIR } from "./differ/ir-differ.js";
