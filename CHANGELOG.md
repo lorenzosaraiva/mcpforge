@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.2.0 (unreleased)
+
+- Added optimizer `strict` mode as the default behavior.
+- Added optimizer `standard` mode for broader coverage.
+- Added configurable tool cap with `maxTools` and CLI `--max-tools`.
+- Added CLI flags `--strict` and `--standard` to `init` and `generate`.
+- Improved large-API optimizer resilience with chunk tuning and JSON retry handling.
+- Persisted optimizer settings in config (`optimizerMode`, `maxTools`).
+
+## 0.1.0
 
 - Initial release
 - OpenAPI 3.x parsing and MCP server generation

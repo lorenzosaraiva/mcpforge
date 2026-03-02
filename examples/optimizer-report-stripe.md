@@ -808,3 +808,38 @@
 - Direct CLI optimize run failed with rate limit: node.exe : mcpforge failed: 429 {"type":"error","error":{"type":"rate_limit_error","message":"This request would 
 - Because Stripe is large, a pre-filtered optimization pass was required to finish reliably.
 - The optimized 100-tool result reflects the selected high-priority subset, not all 587 endpoints.
+
+## Strict Mode Re-run (2026-03-02)
+
+- Command: `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/stripe-openapi.json`
+- Mode: strict (default target <=25 tools)
+- Result: completed successfully.
+- Strict tool count: 25
+- Log: `examples/optimizer-stripe-strict.log`
+
+### Strict Tool Names (25)
+- list_charges
+- get_charge
+- list_refunds
+- list_customer_subscriptions
+- get_subscription
+- list_customer_payment_methods
+- list_customers
+- get_customer
+- list_customer_cards
+- list_invoices
+- get_invoice
+- list_customer_sources
+- get_invoice_lines
+- create_refund
+- create_charge_refund
+- create_subscription
+- update_subscription
+- create_customer
+- update_customer
+- create_customer_card
+- capture_charge
+- create_invoice
+- create_customer_source
+- add_invoice_lines
+- finalize_invoice

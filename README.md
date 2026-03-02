@@ -1,77 +1,68 @@
-# MCPForge ⚒️
+# MCPForge
 
-Generate production-ready MCP servers from any OpenAPI spec — or any API docs page — in seconds.
+Generate production-ready MCP servers from any OpenAPI spec in seconds.
 
-[![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- demo gif here -->
 
 ## Quick Start
-
-From an OpenAPI spec:
 
 ```bash
 npx mcpforge init https://api.example.com/openapi.json
 ```
 
-From any API docs page (no spec needed):
-
-```bash
-npx mcpforge init --from-url https://docs.stripe.com/api
-```
-
-## Why MCPForge?
-
-Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI specs, but the output is rough — hundreds of tools with bad descriptions that overwhelm LLMs. MCPForge uses AI to curate endpoints into a smaller set of well-named, well-described tools that actually work well with Claude, Cursor, and other MCP clients. Think of it as the difference between dumping a raw API spec on an assistant vs. briefing them on the 20 tools they actually need.
-
 ## What It Does
 
-- Parses any OpenAPI 3.x spec into a clean MCP server
-- No OpenAPI spec? Point MCPForge at any docs URL and it infers endpoints with AI
-- Uses Claude to curate and optimize tools for LLM usage
-- Detects spec drift and flags breaking changes with risk scoring
-- Generates a complete, ready-to-use MCP server with auth, error handling, and docs
+- Parses OpenAPI 3.x specs into MCP-ready tool definitions.
+- Optionally uses Claude to curate and optimize tools for LLM usage.
+- Generates a complete TypeScript MCP server with auth scaffolding, error handling, and docs.
 
 ## Features
 
-- **Smart OpenAPI parsing** — Converts endpoints into MCP-friendly tools with schema-aware inputs.
-- **Docs URL inference** (`--from-url`) — Scrapes API docs pages and uses Claude to infer endpoints. No OpenAPI spec required.
-- **AI-powered tool optimization** (`--optimize`) — Curates noisy endpoint lists into fewer, higher-value tools. Tested on GitHub (1,079 → 108 tools), Stripe (587 → 100), and Spotify (97 → 60).
-- **Breaking change detection** (`diff`) — Compares the current spec against your last generation and flags changes as high, medium, or low risk.
-- **Multiple auth schemes** — Detects API key, bearer, OAuth2, and basic auth. Handles optional vs required auth gracefully.
-- **Claude Desktop & Cursor ready** — Generated README includes copy-paste MCP config snippets.
-- **Inspect & dry-run modes** — Understand a spec before generation and preview tools without writing files.
+- Smart OpenAPI parsing
+- AI-powered tool optimization (strict mode default): GitHub 1,079 -> 25, Stripe 587 -> 25, Spotify 97 -> 25
+- Strict mode by default (`--strict`): targets <=25 essential tools
+- Standard mode available (`--standard`): broader coverage, capped at <=80 tools
+- Custom cap override (`--max-tools <n>`)
+- Multiple auth schemes (none, API key, bearer, OAuth2, basic)
+- Claude Desktop and Cursor ready output
+- Inspect mode and dry-run mode
+- Spec drift detection with `mcpforge diff`
+- Docs URL inference (`--from-url`) when no OpenAPI spec is available
 
 ## Commands
 
-- `mcpforge init <spec>` — Parse a spec, optionally optimize tools, and generate an MCP server project. Use `--from-url` when you only have docs. Use `--optimize` for AI curation. Use `--dry-run` to preview without writing files.
-- `mcpforge generate` — Regenerate from `mcpforge.config.json`. Use `--optimize` to re-run AI optimization.
-- `mcpforge inspect <spec>` — Print API summary, endpoint groups by tag, and quality warnings.
-- `mcpforge diff` — Compare current spec against last generation and flag breaking changes with risk scoring (high/medium/low).
-- `mcpforge test` — Placeholder for upcoming testing workflows.
+- `mcpforge init <spec>`: Parse spec and generate server. Supports `--optimize`, `--dry-run`, `--strict`, `--standard`, `--max-tools`.
+- `mcpforge init --from-url <docs-url>`: Infer API from docs pages with Claude, then generate.
+- `mcpforge generate`: Regenerate from `mcpforge.config.json`. Supports `--optimize`, `--strict`, `--standard`, `--max-tools`.
+- `mcpforge inspect <spec>`: Print API summary, endpoint groups, and warnings.
+- `mcpforge diff`: Compare upstream spec changes against last generated IR with risk scoring.
+- `mcpforge test`: Placeholder command.
 
 ## AI Optimization
 
-Use `--optimize` with `init` or `generate` to run Claude-based tool curation.
+Use optimization during `init` or `generate`:
 
 ```bash
 mcpforge init --optimize https://api.example.com/openapi.json
 ```
 
-The optimizer analyzes your API and:
-- Groups related endpoints into smarter tools
-- Rewrites descriptions to be concise and LLM-friendly
-- Removes noise (health checks, admin routes, deprecated endpoints)
-- Prioritizes the most useful tools
-
-Requires `ANTHROPIC_API_KEY`. When missing, optimization is skipped and generation continues normally.
+Strict mode is now default and aggressively curates to a small, practical toolset for LLMs. Use `--standard` when you need broader endpoint coverage.
 
 ## Configuration
 
-Generated projects include `mcpforge.config.json`, which stores the spec source, output directory, optimization status, and the IR used for generation. Use this file with `mcpforge generate` to regenerate quickly after edits, or with `mcpforge diff` to detect upstream changes.
+Generated projects include `mcpforge.config.json` with:
+
+- `specSource`
+- `sourceType`
+- `outputDir`
+- `optimized`
+- `optimizerMode`
+- `maxTools`
+- `ir`
 
 ## Contributing
 
-Contributions are welcome. Open an issue for bugs or ideas, or submit a PR with a focused change.
+Contributions are welcome. Open an issue or submit a focused PR.
 
 ## License
 

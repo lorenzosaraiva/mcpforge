@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
 import type { MCPForgeIR, ToolDefinition } from "../parser/types.js";
-import type { OptimizationOptions, OptimizationResult } from "./types.js";
+import type { OptimizationOptions, OptimizationResult, OptimizerMode } from "./types.js";
 
 const ToolPrioritySchema = z.enum(["high", "medium", "low"]);
 
@@ -71,7 +71,27 @@ function extractJsonPayload(responseText: string): string {
   return responseText.trim();
 }
 
-function buildOptimizationPrompt(ir: MCPForgeIR): string {
+function buildOptimizationPrompt(ir: MCPForgeIR, mode: OptimizerMode, maxTools: number): string {
+  const strictModeInstructions =
+    mode === "strict"
+      ? [
+          "",
+          `STRICT MODE: You must return NO MORE THAN ${maxTools} tools (default 25). To achieve this:`,
+          "- Only include the endpoints that a typical user would need in 90% of use cases.",
+          "- Aggressively merge CRUD operations on the same resource into single tools with an 'action' parameter when it makes sense.",
+          "- Drop anything that's admin-only, rarely used, or niche.",
+          "- Prioritize: read operations > create operations > update operations > delete operations.",
+          "- If the API has clear 'core' vs 'extended' functionality, only include core.",
+          `- Think about it this way: if you were briefing a new employee on this API and could only show them ${maxTools} tools, which would you pick?`,
+        ]
+      : [
+          "",
+          `STANDARD MODE: Keep broad practical coverage but return NO MORE THAN ${maxTools} tools (default 80).`,
+          "- Keep high-value endpoints for common workflows.",
+          "- Remove obvious admin/internal/noise endpoints.",
+          "- Merge near-duplicate CRUD tools where it improves usability.",
+        ];
+
   return [
     "Optimize this MCPForge IR for LLM usability.",
     "",
@@ -156,14 +176,23 @@ function buildOptimizationPrompt(ir: MCPForgeIR): string {
     "3) Set tool priority to high, medium, or low.",
     "4) Keep auth and API metadata accurate.",
     "5) Keep rawEndpointCount aligned with original endpoint count.",
+    `6) Return at most ${maxTools} tools.`,
+    ...strictModeInstructions,
     "",
     "Input IR JSON:",
     JSON.stringify(ir, null, 2),
   ].join("\n");
 }
 
-const DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION = 200;
-const DEFAULT_OPTIMIZATION_CHUNK_SIZE = 50;
+const DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STANDARD = 200;
+const DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STRICT = 80;
+const DEFAULT_OPTIMIZATION_CHUNK_SIZE_STANDARD = 50;
+const DEFAULT_OPTIMIZATION_CHUNK_SIZE_STRICT = 25;
+const DEFAULT_OPTIMIZER_MODE: OptimizerMode = "strict";
+const DEFAULT_MAX_TOOLS_STRICT = 25;
+const DEFAULT_MAX_TOOLS_STANDARD = 80;
+const DEFAULT_OPTIMIZER_MAX_TOKENS = 8192;
+const MAX_JSON_RETRY_ATTEMPTS = 2;
 const DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS = [
   "payments",
   "payment",
@@ -209,7 +238,12 @@ function selectToolsForOptimization(
   options: OptimizationOptions,
   logger: (message: string) => void,
 ): ToolDefinition[] {
-  const maxEndpointsForOptimization = options.maxEndpointsForOptimization ?? DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION;
+  const mode = resolveMode(options);
+  const maxEndpointsForOptimization =
+    options.maxEndpointsForOptimization ??
+    (mode === "strict"
+      ? DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STRICT
+      : DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STANDARD);
   if (maxEndpointsForOptimization <= 0 || ir.tools.length <= maxEndpointsForOptimization) {
     return ir.tools;
   }
@@ -273,53 +307,139 @@ function isRateLimitError(error: unknown): boolean {
   return message.includes("rate limit");
 }
 
+function resolveMode(options: OptimizationOptions): OptimizerMode {
+  return options.mode ?? DEFAULT_OPTIMIZER_MODE;
+}
+
+function resolveMaxTools(options: OptimizationOptions, mode: OptimizerMode): number {
+  const fallback = mode === "strict" ? DEFAULT_MAX_TOOLS_STRICT : DEFAULT_MAX_TOOLS_STANDARD;
+  const candidate = options.maxTools;
+  if (typeof candidate !== "number" || !Number.isFinite(candidate)) {
+    return fallback;
+  }
+  const floored = Math.floor(candidate);
+  if (floored <= 0) {
+    return fallback;
+  }
+  return floored;
+}
+
+function toolPriorityScore(tool: ToolDefinition): number {
+  if (tool.priority === "high") {
+    return 0;
+  }
+  if (tool.priority === "medium") {
+    return 1;
+  }
+  if (tool.priority === "low") {
+    return 2;
+  }
+  return 1;
+}
+
+function methodScore(method: string): number {
+  const upper = method.toUpperCase();
+  if (upper === "GET") {
+    return 0;
+  }
+  if (upper === "POST") {
+    return 1;
+  }
+  if (upper === "PUT" || upper === "PATCH") {
+    return 2;
+  }
+  if (upper === "DELETE") {
+    return 3;
+  }
+  return 4;
+}
+
+function capTools(tools: ToolDefinition[], maxTools: number): ToolDefinition[] {
+  if (tools.length <= maxTools) {
+    return tools;
+  }
+
+  return tools
+    .map((tool, index) => ({ tool, index }))
+    .sort((left, right) => {
+      const priorityDelta = toolPriorityScore(left.tool) - toolPriorityScore(right.tool);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      const methodDelta = methodScore(left.tool.method) - methodScore(right.tool.method);
+      if (methodDelta !== 0) {
+        return methodDelta;
+      }
+      return left.index - right.index;
+    })
+    .slice(0, maxTools)
+    .map((entry) => entry.tool);
+}
+
 async function optimizeSingleIR(
   client: Anthropic,
   ir: MCPForgeIR,
   options: OptimizationOptions,
 ): Promise<MCPForgeIR> {
-  const prompt = buildOptimizationPrompt(ir);
+  const mode = resolveMode(options);
+  const maxTools = resolveMaxTools(options, mode);
+  const prompt = buildOptimizationPrompt(ir, mode, maxTools);
 
-  const response = await client.messages.create({
-    model: options.model ?? "claude-sonnet-4-20250514",
-    max_tokens: options.maxTokens ?? 4096,
-    temperature: options.temperature ?? 0.3,
-    system:
-      "You are an expert API designer who specializes in LLM tool interfaces. Your outputs must be concise, practical, and strictly valid JSON when requested.",
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  });
+  for (let attempt = 0; attempt <= MAX_JSON_RETRY_ATTEMPTS; attempt += 1) {
+    const retrySuffix =
+      attempt === 0
+        ? ""
+        : "\n\nYour previous response was not valid JSON. Return only valid JSON matching the schema exactly.";
+    const response = await client.messages.create({
+      model: options.model ?? "claude-sonnet-4-20250514",
+      max_tokens: options.maxTokens ?? DEFAULT_OPTIMIZER_MAX_TOKENS,
+      temperature: options.temperature ?? 0.3,
+      system:
+        "You are an expert API designer who specializes in LLM tool interfaces. Your outputs must be concise, practical, and strictly valid JSON when requested.",
+      messages: [
+        {
+          role: "user",
+          content: `${prompt}${retrySuffix}`,
+        },
+      ],
+    });
 
-  const text = response.content
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("\n")
-    .trim();
+    const text = response.content
+      .map((part) => (part.type === "text" ? part.text : ""))
+      .join("\n")
+      .trim();
 
-  if (!text) {
-    throw new Error("Anthropic returned an empty response.");
+    if (!text) {
+      if (attempt === MAX_JSON_RETRY_ATTEMPTS) {
+        throw new Error("Anthropic returned an empty response.");
+      }
+      continue;
+    }
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(extractJsonPayload(text));
+    } catch (error) {
+      if (attempt === MAX_JSON_RETRY_ATTEMPTS) {
+        throw new Error(
+          `Failed to parse optimizer JSON response: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      }
+      continue;
+    }
+
+    const validated = MCPForgeIRSchema.parse(parsedJson);
+    validated.auth.required = validated.auth.required ?? ir.auth.required ?? false;
+    validated.auth.hasSecuritySchemes =
+      validated.auth.hasSecuritySchemes ?? ir.auth.hasSecuritySchemes ?? validated.auth.type !== "none";
+    if (validated.rawEndpointCount <= 0) {
+      validated.rawEndpointCount = ir.rawEndpointCount;
+    }
+    validated.tools = capTools(validated.tools, maxTools);
+    return validated;
   }
 
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(extractJsonPayload(text));
-  } catch (error) {
-    throw new Error(
-      `Failed to parse optimizer JSON response: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
-  }
-
-  const validated = MCPForgeIRSchema.parse(parsedJson);
-  validated.auth.required = validated.auth.required ?? ir.auth.required ?? false;
-  validated.auth.hasSecuritySchemes =
-    validated.auth.hasSecuritySchemes ?? ir.auth.hasSecuritySchemes ?? validated.auth.type !== "none";
-  if (validated.rawEndpointCount <= 0) {
-    validated.rawEndpointCount = ir.rawEndpointCount;
-  }
-  return validated;
+  throw new Error("Failed to obtain a valid optimizer response.");
 }
 
 function splitIntoChunks<T>(items: T[], chunkSize: number): T[][] {
@@ -403,6 +523,8 @@ export async function optimizeIRWithAI(
 ): Promise<OptimizationResult> {
   const logger = options.logger ?? defaultLogger;
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+  const mode = resolveMode(options);
+  const maxTools = resolveMaxTools(options, mode);
 
   if (!apiKey) {
     logger("[mcpforge] ANTHROPIC_API_KEY not found. Skipping AI optimization.");
@@ -420,9 +542,17 @@ export async function optimizeIRWithAI(
     tools: selectedTools,
   };
 
-  const optimizationChunkSize = options.optimizationChunkSize ?? DEFAULT_OPTIMIZATION_CHUNK_SIZE;
+  const optimizationChunkSize =
+    options.optimizationChunkSize ??
+    (mode === "strict" ? DEFAULT_OPTIMIZATION_CHUNK_SIZE_STRICT : DEFAULT_OPTIMIZATION_CHUNK_SIZE_STANDARD);
   if (selectedTools.length <= optimizationChunkSize) {
     const optimizedIR = await optimizeSingleIR(client, scopedIR, options);
+    if (optimizedIR.tools.length > maxTools) {
+      logger(
+        `[mcpforge] Optimizer returned ${optimizedIR.tools.length} tools in ${mode} mode. Trimming to ${maxTools}.`,
+      );
+      optimizedIR.tools = capTools(optimizedIR.tools, maxTools);
+    }
     optimizedIR.rawEndpointCount = ir.rawEndpointCount;
     return {
       optimizedIR,
@@ -445,7 +575,7 @@ export async function optimizeIRWithAI(
   return {
     optimizedIR: {
       ...ir,
-      tools: dedupeToolNames(optimizedTools),
+      tools: capTools(dedupeToolNames(optimizedTools), maxTools),
       rawEndpointCount: ir.rawEndpointCount,
     },
     skipped: false,

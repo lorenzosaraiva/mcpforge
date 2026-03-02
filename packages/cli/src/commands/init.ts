@@ -21,12 +21,45 @@ interface MCPForgeConfig {
   apiName: string;
   outputDir: string;
   optimized: boolean;
+  optimizerMode: "strict" | "standard";
+  maxTools: number;
   ir: MCPForgeIR;
   scrapedDocs?: ScrapedDocPage[];
 }
 
+const DEFAULT_STRICT_MAX_TOOLS = 25;
+const DEFAULT_STANDARD_MAX_TOOLS = 80;
+
 function isNonInteractiveRuntime(): boolean {
   return process.env.MCPFORGE_NON_INTERACTIVE === "1" || !process.stdin.isTTY || !process.stdout.isTTY;
+}
+
+function resolveOptimizationMode(options: {
+  strict?: boolean;
+  standard?: boolean;
+}): "strict" | "standard" {
+  if (options.strict && options.standard) {
+    throw new Error("Use either --strict or --standard, not both.");
+  }
+  if (options.standard) {
+    return "standard";
+  }
+  return "strict";
+}
+
+function resolveMaxTools(
+  rawValue: string | undefined,
+  mode: "strict" | "standard",
+): number {
+  if (rawValue === undefined) {
+    return mode === "strict" ? DEFAULT_STRICT_MAX_TOOLS : DEFAULT_STANDARD_MAX_TOOLS;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error(`--max-tools must be a positive number. Received: ${rawValue}`);
+  }
+  return Math.floor(numeric);
 }
 
 function summarizeTools(ir: MCPForgeIR): string {
@@ -58,14 +91,28 @@ export function registerInitCommand(program: Command): void {
     .option("--from-url", "Treat <spec> as an API documentation URL and infer endpoints with AI")
     .option("--optimize", "Enable AI optimization")
     .option("--no-optimize", "Disable AI optimization")
+    .option("--strict", "Use strict optimization mode (aggressive curation)")
+    .option("--standard", "Use standard optimization mode (broader tool coverage)")
+    .option("--max-tools <number>", "Set max tools target for optimization mode")
     .option("-o, --output <dir>", "Output directory for generated project")
     .option("--dry-run", "Parse and optimize, then print tool summary without writing files")
     .action(
       async (
         spec: string,
-        options: { optimize?: boolean; output?: string; dryRun?: boolean; fromUrl?: boolean },
+        options: {
+          optimize?: boolean;
+          output?: string;
+          dryRun?: boolean;
+          fromUrl?: boolean;
+          strict?: boolean;
+          standard?: boolean;
+          maxTools?: string;
+        },
       ) => {
       intro("mcpforge init");
+
+      const optimizerMode = resolveOptimizationMode(options);
+      const maxTools = resolveMaxTools(options.maxTools, optimizerMode);
 
       let parsedIR: MCPForgeIR;
       let sourceType: MCPForgeConfig["sourceType"] = "openapi";
@@ -134,8 +181,12 @@ export function registerInitCommand(program: Command): void {
 
       if (wantsOptimization) {
         const optimizeSpinner = spinner();
-        optimizeSpinner.start("Optimizing tools with Claude...");
+        optimizeSpinner.start(
+          `Optimizing in ${optimizerMode} mode (target: \u2264${maxTools} tools)...`,
+        );
         const result = await optimizeIRWithAI(parsedIR, {
+          mode: optimizerMode,
+          maxTools,
           logger: (message) => log.warn(message),
         });
 
@@ -158,6 +209,7 @@ export function registerInitCommand(program: Command): void {
             `Source type: ${sourceType}`,
             `Raw endpoints: ${parsedIR.rawEndpointCount}`,
             `Tools after curation: ${finalIR.tools.length}`,
+            `Optimizer mode: ${optimizerMode} (\u2264${maxTools})`,
             ...(scrapedDocs ? [`Docs pages analyzed: ${scrapedDocs.length}`] : []),
             "",
             summarizeTools(finalIR),
@@ -186,6 +238,8 @@ export function registerInitCommand(program: Command): void {
         apiName: toKebabCase(finalIR.apiName),
         outputDir,
         optimized,
+        optimizerMode,
+        maxTools,
         ir: finalIR,
         ...(scrapedDocs ? { scrapedDocs } : {}),
       };

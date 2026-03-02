@@ -254,3 +254,38 @@
 ## Issues / Weird Behavior
 - No hard failures during optimization.
 - The optimizer mostly improved naming/description quality and trimmed low-value overlap; reduction was moderate (97 -> 60).
+
+## Strict Mode Re-run (2026-03-02)
+
+- Command: `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/spotify-openapi.yml`
+- Mode: strict (default target <=25 tools)
+- Result: completed successfully.
+- Strict tool count: 25
+- Log: `examples/optimizer-spotify-strict.log`
+
+### Strict Tool Names (25)
+- search
+- get_track
+- get_several_tracks
+- get_album
+- get_several_albums
+- get_album_tracks
+- get_artist
+- get_several_artists
+- get_artist_albums
+- get_artist_top_tracks
+- get_current_user_profile
+- search_spotify
+- get_track_2
+- get_album_2
+- get_artist_2
+- get_artist_top_tracks_2
+- get_artist_albums_2
+- get_playlist
+- get_playlist_items
+- get_user_playlists
+- get_saved_tracks
+- get_saved_albums
+- get_playback_state
+- get_currently_playing
+- search_2

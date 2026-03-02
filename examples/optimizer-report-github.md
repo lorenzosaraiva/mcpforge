@@ -1318,3 +1318,38 @@
 - Optimization did not cover all 1,079 endpoints. maxEndpointsForOptimization limited the optimization scope to 200 endpoints before chunking.
 - Chunk retries were required (50 -> 25 -> 13/12) due chunk parse/size issues.
 - Final optimized output (108 tools) is high quality for the selected subset, but not a complete curation of the full API.
+
+## Strict Mode Re-run (2026-03-02)
+
+- Command: `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/github-openapi.json`
+- Mode: strict (default target <=25 tools)
+- Result: completed successfully.
+- Strict tool count: 25
+- Log: `examples/optimizer-github-strict.log`
+
+### Strict Tool Names (25)
+- get_user
+- list_user_repos
+- get_repo
+- list_repo_issues
+- get_issue
+- list_pull_requests
+- get_pull_request
+- list_repo_commits
+- get_repo_contents
+- search_repositories
+- search_issues
+- get_repository
+- list_user_repositories
+- get_user_2
+- list_repository_issues
+- get_issue_2
+- list_pull_requests_2
+- get_pull_request_2
+- list_repository_commits
+- get_commit
+- get_repository_content
+- search_repositories_2
+- search_users
+- list_organization_repositories
+- get_organization

@@ -1,33 +1,35 @@
 # OPTIMIZER RESULTS
 
-| API | Raw Endpoints | Unoptimized Tools | Optimized Tools | Reduction % |
-|-----|--------------:|------------------:|----------------:|------------:|
-| GitHub | 1079 | 1079 | 108 | 89.99% |
-| Stripe | 587 | 587 | 100 | 82.96% |
-| Spotify | 97 | 97 | 60 | 38.14% |
+## Historical Standard Mode (previous baseline)
 
-## Overall Observations
-- The optimizer substantially improves naming and descriptions, especially for endpoint-heavy APIs.
-- For very large APIs, context/rate limits dominate behavior; scoped optimization and chunking are necessary.
-- Results are best when optimizing a prioritized subset rather than the full raw endpoint set in one pass.
+| API | Raw Endpoints | Standard Mode |
+|-----|--------------:|--------------:|
+| GitHub | 1,079 | 108 |
+| Stripe | 587 | 100 |
+| Spotify | 97 | 60 |
 
-## What It Does Well
-- Converts operationId-style names into clearer assistant-friendly verbs.
-- Rewrites descriptions to specify actions and expected returns.
-- Removes obvious noise endpoints (meta/health/spec/admin-like operations) in many cases.
+## Strict Mode Re-run (2026-03-02)
 
-## What Needs Improvement
-- Full-spec optimization is still unreliable for massive APIs without manual caps.
-- Category decisions can over-prune niche but potentially useful endpoints.
-- Duplicate/near-duplicate operations can survive if spread across chunks.
+| API | Raw Endpoints | Standard Mode | Strict Mode | Reduction vs Raw |
+|-----|--------------:|--------------:|------------:|-----------------:|
+| GitHub | 1,079 | 108 | 25 | 97.68% |
+| Stripe | 587 | 100 | 25 | 95.74% |
+| Spotify | 97 | 60 | 25 | 74.23% |
 
-## Concrete Prompt Improvements
-- Add stricter per-tool output budget: max 8 parameters unless explicitly justified.
-- Add explicit coverage-mode instruction: preserve at least one tool per high-value tag.
-- Add chunk-level reconciliation prompt: merge near-duplicates across chunk outputs before final IR.
-- Add explicit deprecation handling instruction: keep deprecated routes only if no modern equivalent exists.
-- Add deterministic naming rule section (resource + action) to reduce naming drift across chunks.
+## Run Notes
 
-## Notes
-- Stripe optimized result came from workaround mode (maxEndpointsForOptimization=100) after a direct run hit Anthropic TPM rate limits.
-- GitHub optimized result used built-in large-API cap (maxEndpointsForOptimization=200), so optimized list is a curated subset.
+- Commands run:
+  - `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/github-openapi.json`
+  - `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/stripe-openapi.json`
+  - `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts init --dry-run --optimize /tmp/spotify-openapi.yml`
+- All strict benchmark runs completed successfully.
+- Full strict tool lists are captured in:
+  - `examples/optimizer-report-github.md`
+  - `examples/optimizer-report-stripe.md`
+  - `examples/optimizer-report-spotify.md`
+  - `examples/strict-benchmark-results.json`
+
+## Observations
+
+- Strict mode now consistently enforces a 25-tool output cap across small, medium, and very large APIs.
+- This materially improves MCP tool discoverability for LLM clients versus standard mode output volume.
