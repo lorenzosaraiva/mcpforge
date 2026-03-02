@@ -13,9 +13,18 @@ import { z } from "zod";
 
 const ConfigSchema = z.object({
   specSource: z.string(),
+  sourceType: z.enum(["openapi", "docs-url"]).optional(),
   apiName: z.string(),
   outputDir: z.string().default("."),
   optimized: z.boolean().default(false),
+  scrapedDocs: z
+    .array(
+      z.object({
+        url: z.string(),
+        content: z.string(),
+      }),
+    )
+    .optional(),
   ir: z.unknown(),
 });
 

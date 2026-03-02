@@ -2,13 +2,31 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { diffIR, parseOpenAPISpec, type DiffChange, type DiffResult, type MCPForgeIR } from "../core.js";
+import {
+  diffIR,
+  inferIRFromDocs,
+  parseOpenAPISpec,
+  scrapeDocsFromUrl,
+  type DiffChange,
+  type DiffResult,
+  type MCPForgeIR,
+  type ScrapedDocPage,
+} from "../core.js";
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
 import { z } from "zod";
 
 const ConfigSchema = z.object({
   specSource: z.string(),
+  sourceType: z.enum(["openapi", "docs-url"]).optional(),
+  scrapedDocs: z
+    .array(
+      z.object({
+        url: z.string(),
+        content: z.string(),
+      }),
+    )
+    .optional(),
   ir: z.unknown(),
 });
 
@@ -21,11 +39,11 @@ const RiskOrder: Record<DiffChange["risk"], number> = {
 function toRiskEmoji(risk: DiffChange["risk"]): string {
   switch (risk) {
     case "high":
-      return "🔴";
+      return "\u{1F534}";
     case "medium":
-      return "🟡";
+      return "\u{1F7E1}";
     default:
-      return "🟢";
+      return "\u{1F7E2}";
   }
 }
 
@@ -89,13 +107,49 @@ function buildMarkdownReport(result: DiffResult, specSource: string): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-async function loadConfig(configPath: string): Promise<{ specSource: string; ir: MCPForgeIR }> {
+async function loadConfig(configPath: string): Promise<{
+  specSource: string;
+  sourceType: "openapi" | "docs-url";
+  scrapedDocs?: ScrapedDocPage[];
+  ir: MCPForgeIR;
+}> {
   const rawConfig = await readFile(configPath, "utf8");
   const parsedConfig = ConfigSchema.parse(JSON.parse(rawConfig));
   return {
     specSource: parsedConfig.specSource,
+    sourceType: parsedConfig.sourceType ?? "openapi",
+    scrapedDocs: parsedConfig.scrapedDocs as ScrapedDocPage[] | undefined,
     ir: parsedConfig.ir as MCPForgeIR,
   };
+}
+
+async function parseLatestIRFromSource(
+  config: {
+    specSource: string;
+    sourceType: "openapi" | "docs-url";
+  },
+  logger: (message: string) => void,
+): Promise<MCPForgeIR> {
+  if (config.sourceType === "docs-url") {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "This project was generated from docs URL. ANTHROPIC_API_KEY is required to re-scrape and re-infer during diff.",
+      );
+    }
+
+    const scrapedDocs = await scrapeDocsFromUrl(config.specSource, {
+      maxPages: 20,
+      timeoutMs: 10_000,
+      logger,
+    });
+    return inferIRFromDocs(scrapedDocs, {
+      apiKey,
+      logger,
+    });
+  }
+
+  return parseOpenAPISpec(config.specSource);
 }
 
 function sortChanges(changes: DiffChange[]): DiffChange[] {
@@ -149,7 +203,7 @@ export function registerDiffCommand(program: Command): void {
 
       if (options.json) {
         const config = await loadConfig(configPath);
-        const newIR = await parseOpenAPISpec(config.specSource);
+        const newIR = await parseLatestIRFromSource(config, () => {});
         const rawResult = diffIR(config.ir, newIR);
         const result = {
           ...rawResult,
@@ -173,9 +227,15 @@ export function registerDiffCommand(program: Command): void {
       configSpinner.stop("Config loaded.");
 
       const parseSpinner = spinner();
-      parseSpinner.start(`Re-parsing spec: ${config.specSource}`);
-      const newIR = await parseOpenAPISpec(config.specSource);
-      parseSpinner.stop("Spec parsed.");
+      parseSpinner.start(
+        config.sourceType === "docs-url"
+          ? `Re-scraping docs and inferring API from: ${config.specSource}`
+          : `Re-parsing spec: ${config.specSource}`,
+      );
+      const newIR = await parseLatestIRFromSource(config, (message) => log.warn(message));
+      parseSpinner.stop(
+        config.sourceType === "docs-url" ? "Docs re-analysis completed." : "Spec parsed.",
+      );
 
       const diffSpinner = spinner();
       diffSpinner.start("Comparing previous and current IR...");
@@ -193,14 +253,14 @@ export function registerDiffCommand(program: Command): void {
       }
 
       if (result.summary.totalChanges === 0) {
-        outro("✅ No changes detected. Your server is up to date.");
+        outro("\u2705 No changes detected. Your server is up to date.");
         return;
       }
 
       printFormattedDiff(result);
 
       if (result.summary.high > 0) {
-        log.warn("⚠️ Breaking changes detected. Review before regenerating.");
+        log.warn("\u26A0\uFE0F Breaking changes detected. Review before regenerating.");
       }
 
       outro("Diff complete.");

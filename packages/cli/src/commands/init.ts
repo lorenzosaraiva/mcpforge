@@ -4,8 +4,11 @@ import { basename, join, relative, resolve } from "node:path";
 import {
   type MCPForgeIR,
   generateTypeScriptMCPServer,
+  inferIRFromDocs,
   optimizeIRWithAI,
   parseOpenAPISpec,
+  scrapeDocsFromUrl,
+  type ScrapedDocPage,
 } from "../core.js";
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
@@ -14,10 +17,12 @@ import { promptConfirm, promptText } from "../utils/prompts.js";
 
 interface MCPForgeConfig {
   specSource: string;
+  sourceType: "openapi" | "docs-url";
   apiName: string;
   outputDir: string;
   optimized: boolean;
   ir: MCPForgeIR;
+  scrapedDocs?: ScrapedDocPage[];
 }
 
 function isNonInteractiveRuntime(): boolean {
@@ -48,19 +53,65 @@ async function writeConfigFile(configPath: string, config: MCPForgeConfig): Prom
 export function registerInitCommand(program: Command): void {
   program
     .command("init")
-    .argument("<spec>", "OpenAPI spec URL or local file path")
-    .description("Parse an OpenAPI spec and generate a complete MCP server project")
+    .argument("<spec>", "OpenAPI spec URL/path, or docs URL with --from-url")
+    .description("Parse an OpenAPI spec (or infer from docs URL) and generate a complete MCP server project")
+    .option("--from-url", "Treat <spec> as an API documentation URL and infer endpoints with AI")
     .option("--optimize", "Enable AI optimization")
     .option("--no-optimize", "Disable AI optimization")
     .option("-o, --output <dir>", "Output directory for generated project")
     .option("--dry-run", "Parse and optimize, then print tool summary without writing files")
-    .action(async (spec: string, options: { optimize?: boolean; output?: string; dryRun?: boolean }) => {
+    .action(
+      async (
+        spec: string,
+        options: { optimize?: boolean; output?: string; dryRun?: boolean; fromUrl?: boolean },
+      ) => {
       intro("mcpforge init");
 
-      const parseSpinner = spinner();
-      parseSpinner.start("Parsing OpenAPI spec...");
-      const parsedIR = await parseOpenAPISpec(spec);
-      parseSpinner.stop("OpenAPI parsed successfully.");
+      let parsedIR: MCPForgeIR;
+      let sourceType: MCPForgeConfig["sourceType"] = "openapi";
+      let scrapedDocs: ScrapedDocPage[] | undefined;
+
+      if (options.fromUrl) {
+        sourceType = "docs-url";
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          throw new Error("--from-url requires ANTHROPIC_API_KEY to infer API structure from documentation.");
+        }
+
+        const scrapeSpinner = spinner();
+        scrapeSpinner.start(`Scraping API documentation from ${spec}...`);
+        scrapedDocs = await scrapeDocsFromUrl(spec, {
+          logger: (message) => log.warn(message),
+          maxPages: 20,
+          timeoutMs: 10_000,
+        });
+        scrapeSpinner.stop("Documentation pages scraped.");
+
+        note(
+          [
+            `Found ${scrapedDocs.length} documentation page(s).`,
+            "Analyzing documentation with AI to infer API structure...",
+          ].join("\n"),
+          "Docs Extraction",
+        );
+
+        const inferSpinner = spinner();
+        inferSpinner.start("Analyzing docs with Claude...");
+        parsedIR = await inferIRFromDocs(scrapedDocs, {
+          apiKey,
+          logger: (message) => log.warn(message),
+        });
+        inferSpinner.stop("AI analysis completed.");
+
+        log.info(
+          `Identified ${parsedIR.tools.length} endpoint(s). API: ${parsedIR.apiName}. Auth: ${parsedIR.auth.type}.`,
+        );
+      } else {
+        const parseSpinner = spinner();
+        parseSpinner.start("Parsing OpenAPI spec...");
+        parsedIR = await parseOpenAPISpec(spec);
+        parseSpinner.stop("OpenAPI parsed successfully.");
+      }
 
       note(
         [
@@ -104,8 +155,10 @@ export function registerInitCommand(program: Command): void {
       if (options.dryRun) {
         note(
           [
+            `Source type: ${sourceType}`,
             `Raw endpoints: ${parsedIR.rawEndpointCount}`,
             `Tools after curation: ${finalIR.tools.length}`,
+            ...(scrapedDocs ? [`Docs pages analyzed: ${scrapedDocs.length}`] : []),
             "",
             summarizeTools(finalIR),
           ].join("\n"),
@@ -129,10 +182,12 @@ export function registerInitCommand(program: Command): void {
 
       const config: MCPForgeConfig = {
         specSource: spec,
+        sourceType,
         apiName: toKebabCase(finalIR.apiName),
         outputDir,
         optimized,
         ir: finalIR,
+        ...(scrapedDocs ? { scrapedDocs } : {}),
       };
 
       await writeConfigFile(join(resolvedOutputDir, "mcpforge.config.json"), config);
