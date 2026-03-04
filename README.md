@@ -5,6 +5,10 @@ Generate production-ready MCP servers from any OpenAPI spec — or any API docs 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Demo
+
+![MCPForge Demo](./assets/demo.gif)
+
 ## Quick Start
 
 From an OpenAPI spec:
