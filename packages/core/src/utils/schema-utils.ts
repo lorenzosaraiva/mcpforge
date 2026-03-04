@@ -7,7 +7,38 @@ type JsonValue =
   | JsonValue[];
 
 function deepClone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  const seen = new WeakMap<object, unknown>();
+
+  const clone = (input: unknown): unknown => {
+    if (Array.isArray(input)) {
+      if (seen.has(input)) {
+        return [];
+      }
+      const output: unknown[] = [];
+      seen.set(input, output);
+      for (const item of input) {
+        output.push(clone(item));
+      }
+      return output;
+    }
+
+    if (!input || typeof input !== "object") {
+      return input;
+    }
+
+    if (seen.has(input)) {
+      return {};
+    }
+
+    const output: Record<string, unknown> = {};
+    seen.set(input, output);
+    for (const [key, item] of Object.entries(input as Record<string, unknown>)) {
+      output[key] = clone(item);
+    }
+    return output;
+  };
+
+  return clone(value) as T;
 }
 
 function normalizeNode(input: unknown): unknown {

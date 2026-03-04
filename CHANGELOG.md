@@ -8,6 +8,13 @@
 - Added CLI flags `--strict` and `--standard` to `init` and `generate`.
 - Improved large-API optimizer resilience with chunk tuning and JSON retry handling.
 - Persisted optimizer settings in config (`optimizerMode`, `maxTools`).
+- Fixed circular `$ref` schema handling in parser/schema normalization.
+- Improved Swagger 2.0 compatibility:
+  - Resolve base URL from `schemes`/`host`/`basePath`.
+  - Detect auth from `securityDefinitions`.
+  - Map `body` and `formData` parameters into request bodies.
+  - Map non-body parameter types from Swagger 2.0 parameter objects.
+- Hardened code generation for large specs by caching templates and batching tool file writes to avoid `EMFILE` failures.
 
 ## 0.1.0
 

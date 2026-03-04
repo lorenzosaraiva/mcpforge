@@ -32,6 +32,7 @@ interface PreparedTool {
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 let helpersRegistered = false;
+const templateCache = new Map<string, Handlebars.TemplateDelegate>();
 
 function toPascalCase(value: string): string {
   return value
@@ -69,8 +70,12 @@ function resolveTemplateDirectory(): string {
 }
 
 async function renderTemplate(templatePath: string, data: Record<string, unknown>): Promise<string> {
-  const source = await readFile(templatePath, "utf8");
-  const template = Handlebars.compile(source, { noEscape: true });
+  let template = templateCache.get(templatePath);
+  if (!template) {
+    const source = await readFile(templatePath, "utf8");
+    template = Handlebars.compile(source, { noEscape: true });
+    templateCache.set(templatePath, template);
+  }
   return template(data);
 }
 
@@ -200,55 +205,57 @@ export async function generateTypeScriptMCPServer(
     generatedAt: new Date().toISOString(),
   };
 
-  const fileWrites: Array<Promise<void>> = [];
+  let fileCount = 0;
 
-  fileWrites.push(
-    writeRenderedFile(
-      join(srcDir, "index.ts"),
-      join(templateDir, "index.ts.hbs"),
-      commonTemplateData,
-    ),
+  await writeRenderedFile(
+    join(srcDir, "index.ts"),
+    join(templateDir, "index.ts.hbs"),
+    commonTemplateData,
   );
+  fileCount += 1;
+
   if (hasAuth) {
-    fileWrites.push(
-      writeRenderedFile(
-        join(srcDir, "auth.ts"),
-        join(templateDir, "auth.ts.hbs"),
-        commonTemplateData,
-      ),
+    await writeRenderedFile(
+      join(srcDir, "auth.ts"),
+      join(templateDir, "auth.ts.hbs"),
+      commonTemplateData,
     );
+    fileCount += 1;
   }
-  fileWrites.push(
-    writeRenderedFile(
-      join(outputDir, "package.json"),
-      join(templateDir, "package.json.hbs"),
-      commonTemplateData,
-    ),
+  await writeRenderedFile(
+    join(outputDir, "package.json"),
+    join(templateDir, "package.json.hbs"),
+    commonTemplateData,
   );
-  fileWrites.push(
-    writeRenderedFile(
-      join(outputDir, "tsconfig.json"),
-      join(templateDir, "tsconfig.json.hbs"),
-      commonTemplateData,
-    ),
-  );
-  fileWrites.push(
-    writeRenderedFile(
-      join(outputDir, ".env.example"),
-      join(templateDir, ".env.example.hbs"),
-      commonTemplateData,
-    ),
-  );
-  fileWrites.push(
-    writeRenderedFile(
-      join(outputDir, "README.md"),
-      join(templateDir, "README.md.hbs"),
-      commonTemplateData,
-    ),
-  );
+  fileCount += 1;
 
-  for (const tool of preparedTools) {
-    fileWrites.push(
+  await writeRenderedFile(
+    join(outputDir, "tsconfig.json"),
+    join(templateDir, "tsconfig.json.hbs"),
+    commonTemplateData,
+  );
+  fileCount += 1;
+
+  await writeRenderedFile(
+    join(outputDir, ".env.example"),
+    join(templateDir, ".env.example.hbs"),
+    commonTemplateData,
+  );
+  fileCount += 1;
+
+  await writeRenderedFile(
+    join(outputDir, "README.md"),
+    join(templateDir, "README.md.hbs"),
+    commonTemplateData,
+  );
+  fileCount += 1;
+
+  // Avoid EMFILE on large specs by batching tool-file writes.
+  const TOOL_WRITE_CONCURRENCY = 16;
+  for (let index = 0; index < preparedTools.length; index += TOOL_WRITE_CONCURRENCY) {
+    const batch = preparedTools.slice(index, index + TOOL_WRITE_CONCURRENCY);
+    await Promise.all(
+      batch.map((tool) =>
       writeRenderedFile(
         join(toolsDir, `${tool.handlerFileName}.ts`),
         join(templateDir, "tool-handler.ts.hbs"),
@@ -256,15 +263,14 @@ export async function generateTypeScriptMCPServer(
           ...commonTemplateData,
           tool,
         },
-      ),
+      )),
     );
+    fileCount += batch.length;
   }
-
-  await Promise.all(fileWrites);
 
   return {
     outputDir,
-    fileCount: fileWrites.length,
+    fileCount,
     generatedToolCount: preparedTools.length,
   };
 }
