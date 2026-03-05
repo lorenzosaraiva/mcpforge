@@ -6,6 +6,7 @@
 - Added optimizer `standard` mode for broader coverage.
 - Added configurable tool cap with `maxTools` and CLI `--max-tools`.
 - Added CLI flags `--strict` and `--standard` to `init` and `generate`.
+- Added `update` command to combine upstream diffing and in-place regeneration with high-risk confirmation, non-interactive safeguards, and dry-run/force controls.
 - Improved large-API optimizer resilience with chunk tuning and JSON retry handling.
 - Persisted optimizer settings in config (`optimizerMode`, `maxTools`).
 - Fixed circular `$ref` schema handling in parser/schema normalization.

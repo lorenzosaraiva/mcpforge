@@ -52,6 +52,7 @@ Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI spec
 - `mcpforge generate` — Regenerate from `mcpforge.config.json`. Use `--optimize` to re-run AI optimization.
 - `mcpforge inspect <spec>` — Print API summary, endpoint groups by tag, and quality warnings.
 - `mcpforge diff` — Compare current spec against last generation and flag breaking changes with risk scoring (high/medium/low).
+- `mcpforge update` — Check for upstream spec changes and regenerate your server. Shows a diff summary and asks for confirmation on breaking changes.
 - `mcpforge test` — Placeholder for upcoming testing workflows.
 
 ## AI Optimization
@@ -75,6 +76,24 @@ Requires `ANTHROPIC_API_KEY`. When missing, optimization is skipped and generati
 ## Configuration
 
 Generated projects include `mcpforge.config.json`, which stores the spec source, output directory, optimization mode, and the IR used for generation. Use this file with `mcpforge generate` to regenerate quickly after edits, or with `mcpforge diff` to detect upstream changes.
+
+## Tested APIs
+
+MCPForge has been tested against 10 diverse real-world API specs across different formats and edge cases.
+
+| API | Format | Endpoints | Status |
+|-----|--------|-----------|--------|
+| Twilio | OpenAPI 3.x | 197 | ✅ |
+| Kubernetes | Swagger 2.0 | 1,085 | ✅ |
+| Discord | OpenAPI 3.1 | 229 | ✅ |
+| Notion | OpenAPI 3.0 | 13 | ✅ |
+| PandaDoc | OpenAPI 3.0 | 115 | ✅ |
+| Adyen | OpenAPI 3.1 | 2 | ✅ |
+| Slack | YAML (OpenAPI 3.0) | 174 | ✅ |
+| api.video | OpenAPI 3.0 (circular refs) | 47 | ✅ |
+| Amadeus | Swagger 2.0 | 1 | ✅ |
+
+Supports OpenAPI 3.0, 3.1, Swagger 2.0, JSON and YAML formats, circular `$ref` schemas, and specs with missing operationIds. Full report in [examples/compatibility-report.md](./examples/compatibility-report.md).
 
 ## Contributing
 

@@ -7,6 +7,7 @@ import { registerGenerateCommand } from "./commands/generate.js";
 import { registerInitCommand } from "./commands/init.js";
 import { registerInspectCommand } from "./commands/inspect.js";
 import { registerTestCommand } from "./commands/test.js";
+import { registerUpdateCommand } from "./commands/update.js";
 
 const program = new Command();
 
@@ -19,6 +20,7 @@ registerInitCommand(program);
 registerGenerateCommand(program);
 registerInspectCommand(program);
 registerDiffCommand(program);
+registerUpdateCommand(program);
 registerTestCommand(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {
