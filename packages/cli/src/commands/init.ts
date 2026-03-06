@@ -1,8 +1,8 @@
-import { writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
 
 import {
   type MCPForgeIR,
+  type OptimizerMode,
   generateTypeScriptMCPServer,
   inferIRFromDocs,
   optimizeIRWithAI,
@@ -13,31 +13,24 @@ import {
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
 
+import { type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
 import { promptConfirm, promptText } from "../utils/prompts.js";
-
-interface MCPForgeConfig {
-  specSource: string;
-  sourceType: "openapi" | "docs-url";
-  apiName: string;
-  outputDir: string;
-  optimized: boolean;
-  optimizerMode: "strict" | "standard";
-  maxTools: number;
-  ir: MCPForgeIR;
-  scrapedDocs?: ScrapedDocPage[];
-}
+import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import {
+  applyOptimizedToolSuggestions,
+  deriveSuggestedSelectionValues,
+  filterIRBySelectedTools,
+  getAllToolSelectionValues,
+} from "../utils/tool-selection.js";
+import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
 const DEFAULT_STANDARD_MAX_TOOLS = 80;
 
-function isNonInteractiveRuntime(): boolean {
-  return process.env.MCPFORGE_NON_INTERACTIVE === "1" || !process.stdin.isTTY || !process.stdout.isTTY;
-}
-
 function resolveOptimizationMode(options: {
   strict?: boolean;
   standard?: boolean;
-}): "strict" | "standard" {
+}): OptimizerMode {
   if (options.strict && options.standard) {
     throw new Error("Use either --strict or --standard, not both.");
   }
@@ -49,7 +42,7 @@ function resolveOptimizationMode(options: {
 
 function resolveMaxTools(
   rawValue: string | undefined,
-  mode: "strict" | "standard",
+  mode: OptimizerMode,
 ): number {
   if (rawValue === undefined) {
     return mode === "strict" ? DEFAULT_STRICT_MAX_TOOLS : DEFAULT_STANDARD_MAX_TOOLS;
@@ -79,8 +72,13 @@ function toKebabCase(value: string): string {
     .toLowerCase();
 }
 
-async function writeConfigFile(configPath: string, config: MCPForgeConfig): Promise<void> {
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function registerInitCommand(program: Command): void {
@@ -94,6 +92,7 @@ export function registerInitCommand(program: Command): void {
     .option("--strict", "Use strict optimization mode (aggressive curation)")
     .option("--standard", "Use standard optimization mode (broader tool coverage)")
     .option("--max-tools <number>", "Set max tools target for optimization mode")
+    .option("--pick", "Interactively select which endpoints become tools")
     .option("-o, --output <dir>", "Output directory for generated project")
     .option("--dry-run", "Parse and optimize, then print tool summary without writing files")
     .action(
@@ -107,6 +106,7 @@ export function registerInitCommand(program: Command): void {
           strict?: boolean;
           standard?: boolean;
           maxTools?: string;
+          pick?: boolean;
         },
       ) => {
       intro("mcpforge init");
@@ -176,7 +176,7 @@ export function registerInitCommand(program: Command): void {
           ? false
           : await promptConfirm("Would you like AI to optimize the tools for LLM usage?", true));
 
-      let finalIR = parsedIR;
+      let optimizedIR: MCPForgeIR | undefined;
       let optimized = false;
 
       if (wantsOptimization) {
@@ -195,21 +195,48 @@ export function registerInitCommand(program: Command): void {
           log.warn(result.reason ?? "Optimization skipped.");
         } else {
           optimizeSpinner.stop("Optimization completed.");
-          finalIR = result.optimizedIR;
+          optimizedIR = result.optimizedIR;
           optimized = true;
           log.info(
-            `Tool count changed: ${parsedIR.tools.length} endpoints -> ${finalIR.tools.length} tools`,
+            `Tool count changed: ${parsedIR.tools.length} endpoints -> ${optimizedIR.tools.length} AI-suggested tools`,
           );
         }
       }
+
+      const defaultSelectedTools = optimizedIR
+        ? deriveSuggestedSelectionValues(parsedIR, optimizedIR)
+        : getAllToolSelectionValues(parsedIR);
+      let selectedTools = defaultSelectedTools;
+
+      if (options.pick) {
+        if (isNonInteractiveRuntime()) {
+          log.warn("Non-interactive mode detected. Ignoring --pick.");
+        } else {
+          const pickResult = await pickToolsFromIR(parsedIR, {
+            defaultSelectedTools,
+            message: "Select endpoints to generate as tools",
+          });
+          selectedTools = pickResult.selectedTools;
+          log.info(
+            `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+          );
+        }
+      }
+
+      const finalIR = filterIRBySelectedTools(
+        applyOptimizedToolSuggestions(parsedIR, optimizedIR),
+        selectedTools,
+      );
 
       if (options.dryRun) {
         note(
           [
             `Source type: ${sourceType}`,
             `Raw endpoints: ${parsedIR.rawEndpointCount}`,
-            `Tools after curation: ${finalIR.tools.length}`,
+            `Selected tools: ${finalIR.tools.length}`,
+            `Picker enabled: ${options.pick ? "yes" : "no"}`,
             `Optimizer mode: ${optimizerMode} (\u2264${maxTools})`,
+            `Optimization applied: ${optimized ? "yes" : "no"}`,
             ...(scrapedDocs ? [`Docs pages analyzed: ${scrapedDocs.length}`] : []),
             "",
             summarizeTools(finalIR),
@@ -233,14 +260,17 @@ export function registerInitCommand(program: Command): void {
       });
 
       const config: MCPForgeConfig = {
-        specSource: spec,
+        specSource: options.fromUrl || isHttpUrl(spec) ? spec : resolve(process.cwd(), spec),
         sourceType,
         apiName: toKebabCase(finalIR.apiName),
         outputDir,
         optimized,
         optimizerMode,
         maxTools,
+        selectedTools,
         ir: finalIR,
+        sourceIR: parsedIR,
+        ...(optimizedIR ? { optimizedIR } : {}),
         ...(scrapedDocs ? { scrapedDocs } : {}),
       };
 

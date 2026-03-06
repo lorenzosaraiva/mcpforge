@@ -2,6 +2,8 @@
 
 ## 0.2.0 (unreleased)
 
+- Added interactive `--pick` support to `init`, `generate`, and `update`, including large-API tag picking and optimizer-backed default selections.
+- Persisted `selectedTools` plus source/optimized IR snapshots in config so later regenerations keep the chosen tool subset.
 - Added optimizer `strict` mode as the default behavior.
 - Added optimizer `standard` mode for broader coverage.
 - Added configurable tool cap with `maxTools` and CLI `--max-tools`.

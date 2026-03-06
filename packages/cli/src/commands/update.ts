@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
 import {
@@ -16,40 +15,22 @@ import {
 } from "../core.js";
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
-import { z } from "zod";
 
+import {
+  loadConfig,
+  type LoadedMCPForgeConfig,
+  type MCPForgeConfig,
+  writeConfigFile,
+} from "../utils/config.js";
 import { promptConfirm } from "../utils/prompts.js";
-
-const ConfigSchema = z.object({
-  specSource: z.string(),
-  sourceType: z.enum(["openapi", "docs-url"]).optional(),
-  apiName: z.string().optional(),
-  outputDir: z.string().optional(),
-  optimized: z.boolean().optional(),
-  optimizerMode: z.enum(["strict", "standard"]).optional(),
-  maxTools: z.number().int().positive().optional(),
-  scrapedDocs: z
-    .array(
-      z.object({
-        url: z.string(),
-        content: z.string(),
-      }),
-    )
-    .optional(),
-  ir: z.unknown(),
-});
-
-interface LoadedConfig {
-  specSource: string;
-  sourceType: "openapi" | "docs-url";
-  apiName: string;
-  outputDir: string;
-  optimized: boolean;
-  optimizerMode: "strict" | "standard";
-  maxTools: number;
-  ir: MCPForgeIR;
-  scrapedDocs?: ScrapedDocPage[];
-}
+import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import {
+  applyOptimizedToolSuggestions,
+  deriveSuggestedSelectionValues,
+  filterIRBySelectedTools,
+  resolveSelectedToolsForIR,
+} from "../utils/tool-selection.js";
+import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
 const DEFAULT_STANDARD_MAX_TOOLS = 80;
@@ -59,10 +40,6 @@ const RiskOrder: Record<DiffChange["risk"], number> = {
   medium: 1,
   low: 2,
 };
-
-function isNonInteractiveRuntime(): boolean {
-  return process.env.MCPFORGE_NON_INTERACTIVE === "1" || !process.stdin.isTTY || !process.stdout.isTTY;
-}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -78,34 +55,6 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function toKebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-")
-    .toLowerCase();
-}
-
-function resolveOptimizationMode(configuredMode?: "strict" | "standard"): "strict" | "standard" {
-  return configuredMode ?? "strict";
-}
-
-function resolveApiName(configuredApiName: string | undefined, ir: unknown): string {
-  if (configuredApiName && configuredApiName.trim()) {
-    return configuredApiName.trim();
-  }
-
-  if (ir && typeof ir === "object" && !Array.isArray(ir)) {
-    const candidate = (ir as Record<string, unknown>).apiName;
-    if (typeof candidate === "string" && candidate.trim()) {
-      return toKebabCase(candidate);
-    }
-  }
-
-  return "generated-api";
 }
 
 function resolveMaxTools(
@@ -238,42 +187,8 @@ function printFormattedDiff(result: DiffResult): void {
   }
 }
 
-async function loadConfig(configPath: string): Promise<LoadedConfig> {
-  let parsedJson: unknown;
-  try {
-    const rawConfig = await readFile(configPath, "utf8");
-    parsedJson = JSON.parse(rawConfig.replace(/^\uFEFF/, ""));
-  } catch (error) {
-    throw new Error(`Failed to read mcpforge.config.json: ${getErrorMessage(error)}`);
-  }
-
-  let parsedConfig: z.infer<typeof ConfigSchema>;
-  try {
-    parsedConfig = ConfigSchema.parse(parsedJson);
-  } catch (error) {
-    throw new Error(`Invalid mcpforge.config.json: ${getErrorMessage(error)}`);
-  }
-
-  const ir = parsedConfig.ir as MCPForgeIR;
-  const sourceType = parsedConfig.sourceType ?? "openapi";
-  const optimizerMode = resolveOptimizationMode(parsedConfig.optimizerMode);
-  const maxTools = resolveMaxTools(parsedConfig.maxTools, optimizerMode);
-
-  return {
-    specSource: parsedConfig.specSource,
-    sourceType,
-    apiName: resolveApiName(parsedConfig.apiName, ir),
-    outputDir: parsedConfig.outputDir ?? ".",
-    optimized: parsedConfig.optimized ?? false,
-    optimizerMode,
-    maxTools,
-    ir,
-    scrapedDocs: parsedConfig.scrapedDocs as ScrapedDocPage[] | undefined,
-  };
-}
-
 async function parseLatestIRFromSource(
-  config: LoadedConfig,
+  config: LoadedMCPForgeConfig,
   logger: (message: string) => void,
 ): Promise<{ ir: MCPForgeIR; scrapedDocs?: ScrapedDocPage[] }> {
   try {
@@ -308,8 +223,20 @@ async function parseLatestIRFromSource(
   }
 }
 
-function shouldReoptimize(options: { optimize?: boolean }, config: LoadedConfig): boolean {
+function shouldReoptimize(options: { optimize?: boolean }, config: LoadedMCPForgeConfig): boolean {
   return options.optimize ?? config.optimized;
+}
+
+function buildFinalIR(
+  sourceIR: MCPForgeIR,
+  optimizedIR: MCPForgeIR | undefined,
+  optimized: boolean,
+  selectedTools: readonly string[],
+): MCPForgeIR {
+  return filterIRBySelectedTools(
+    applyOptimizedToolSuggestions(sourceIR, optimized ? optimizedIR : undefined),
+    selectedTools,
+  );
 }
 
 export function registerUpdateCommand(program: Command): void {
@@ -319,149 +246,200 @@ export function registerUpdateCommand(program: Command): void {
     .option("--force", "Skip confirmation even when high-risk changes are detected")
     .option("--optimize", "Re-run optimization during regeneration")
     .option("--no-optimize", "Skip optimization even if this project was previously optimized")
+    .option("--pick", "Interactively re-pick which endpoints become tools")
     .option("--dry-run", "Show what would change without regenerating files")
-    .action(async (options: { force?: boolean; optimize?: boolean; dryRun?: boolean }) => {
-      if (process.argv.includes("--optimize") && process.argv.includes("--no-optimize")) {
-        throw new Error("Use either --optimize or --no-optimize, not both.");
-      }
+    .action(
+      async (
+        options: {
+          force?: boolean;
+          optimize?: boolean;
+          dryRun?: boolean;
+          pick?: boolean;
+        },
+      ) => {
+        if (process.argv.includes("--optimize") && process.argv.includes("--no-optimize")) {
+          throw new Error("Use either --optimize or --no-optimize, not both.");
+        }
 
-      intro("mcpforge update");
+        intro("mcpforge update");
 
-      const configDir = process.cwd();
-      const configPath = join(configDir, "mcpforge.config.json");
-      if (!existsSync(configPath)) {
-        throw new Error(
-          'mcpforge.config.json not found in current directory. Run this command from your generated MCP project, or run "mcpforge init" first.',
-        );
-      }
-
-      const configSpinner = spinner();
-      configSpinner.start("Loading mcpforge config...");
-      const config = await loadConfig(configPath);
-      configSpinner.stop("Config loaded.");
-
-      const outputDir = resolveOutputDirectory(config.outputDir, configDir);
-      assertOutputDirectoryUsable(outputDir);
-
-      const refreshSpinner = spinner();
-      refreshSpinner.start(
-        config.sourceType === "docs-url"
-          ? `Re-scraping docs and inferring API from: ${config.specSource}`
-          : `Re-parsing spec: ${config.specSource}`,
-      );
-      const latest = await parseLatestIRFromSource(config, (message) => log.warn(message));
-      refreshSpinner.stop(
-        config.sourceType === "docs-url" ? "Docs re-analysis completed." : "Spec parsed.",
-      );
-
-      const diffSpinner = spinner();
-      diffSpinner.start("Comparing previous and current IR...");
-      const rawResult = diffIR(config.ir, latest.ir);
-      const result = {
-        ...rawResult,
-        changes: sortChanges(rawResult.changes),
-      };
-      diffSpinner.stop("Diff completed.");
-
-      if (result.summary.totalChanges === 0) {
-        outro("\u2705 Your server is up to date.");
-        return;
-      }
-
-      printFormattedDiff(result);
-
-      if (options.dryRun) {
-        outro("Dry run complete. Changes detected, but no files were written.");
-        return;
-      }
-
-      const hasHighRiskChanges = result.summary.high > 0;
-      if (hasHighRiskChanges && !options.force) {
-        if (isNonInteractiveRuntime()) {
-          log.warn(
-            "\u26A0\uFE0F Breaking changes detected. Non-interactive mode is enabled, so regeneration was skipped. Re-run with --force to continue.",
+        const configDir = process.cwd();
+        const configPath = join(configDir, "mcpforge.config.json");
+        if (!existsSync(configPath)) {
+          throw new Error(
+            'mcpforge.config.json not found in current directory. Run this command from your generated MCP project, or run "mcpforge init" first.',
           );
-          outro("Update finished without regeneration.");
-          return;
         }
 
-        const confirmed = await promptConfirm(
-          "\u26A0\uFE0F Breaking changes detected. Regenerate anyway? (y/n)",
-          false,
+        const configSpinner = spinner();
+        configSpinner.start("Loading mcpforge config...");
+        const config = await loadConfig(configPath);
+        configSpinner.stop("Config loaded.");
+
+        const outputDir = resolveOutputDirectory(config.outputDir, configDir);
+        assertOutputDirectoryUsable(outputDir);
+
+        const refreshSpinner = spinner();
+        refreshSpinner.start(
+          config.sourceType === "docs-url"
+            ? `Re-scraping docs and inferring API from: ${config.specSource}`
+            : `Re-parsing spec: ${config.specSource}`,
         );
-        if (!confirmed) {
-          outro("Update cancelled. No files were written.");
-          return;
-        }
-      }
-
-      let finalIR = latest.ir;
-      let optimized = false;
-      const runOptimization = shouldReoptimize({ optimize: options.optimize }, config);
-
-      if (runOptimization) {
-        const optimizeSpinner = spinner();
-        optimizeSpinner.start(
-          `Optimizing in ${config.optimizerMode} mode (target: \u2264${config.maxTools} tools)...`,
+        const latest = await parseLatestIRFromSource(config, (message) => log.warn(message));
+        refreshSpinner.stop(
+          config.sourceType === "docs-url" ? "Docs re-analysis completed." : "Spec parsed.",
         );
-        const optimizeResult = await optimizeIRWithAI(latest.ir, {
-          mode: config.optimizerMode,
-          maxTools: config.maxTools,
-          logger: (message) => log.warn(message),
-        });
 
-        if (optimizeResult.skipped) {
-          optimizeSpinner.stop("Optimization skipped.");
-          optimized = false;
-          log.warn(optimizeResult.reason ?? "Optimization skipped.");
+        const currentSelection = resolveSelectedToolsForIR(config.sourceIR, config.selectedTools);
+        const previousSelectedIR = filterIRBySelectedTools(config.sourceIR, currentSelection);
+        const latestSelectedIR = filterIRBySelectedTools(latest.ir, currentSelection);
+
+        const diffSpinner = spinner();
+        diffSpinner.start("Comparing previous and current IR...");
+        const rawResult = diffIR(previousSelectedIR, latestSelectedIR);
+        const result = {
+          ...rawResult,
+          changes: sortChanges(rawResult.changes),
+        };
+        diffSpinner.stop("Diff completed.");
+
+        const hasChanges = result.summary.totalChanges > 0;
+        const pickerEnabled = Boolean(options.pick) && !isNonInteractiveRuntime();
+        if (hasChanges) {
+          printFormattedDiff(result);
         } else {
-          optimizeSpinner.stop("Optimization completed.");
-          finalIR = optimizeResult.optimizedIR;
-          optimized = true;
-          note(
-            `Tool count changed: ${latest.ir.tools.length} endpoints -> ${finalIR.tools.length} tools`,
-            "Optimization Result",
+          note("No upstream changes were detected for the currently selected tools.", "Up To Date");
+        }
+
+        if (options.pick && !pickerEnabled) {
+          log.warn("Non-interactive mode detected. Ignoring --pick.");
+        }
+
+        if (options.dryRun) {
+          outro("Dry run complete. No files were written.");
+          return;
+        }
+
+        if (!hasChanges && !pickerEnabled && !options.optimize) {
+          outro("\u2705 Your server is up to date.");
+          return;
+        }
+
+        const hasHighRiskChanges = result.summary.high > 0;
+        if (hasHighRiskChanges && !options.force) {
+          if (isNonInteractiveRuntime()) {
+            log.warn(
+              "\u26A0\uFE0F Breaking changes detected. Non-interactive mode is enabled, so regeneration was skipped. Re-run with --force to continue.",
+            );
+            outro("Update finished without regeneration.");
+            return;
+          }
+
+          const confirmed = await promptConfirm(
+            "\u26A0\uFE0F Breaking changes detected. Regenerate anyway? (y/n)",
+            false,
+          );
+          if (!confirmed) {
+            outro("Update cancelled. No files were written.");
+            return;
+          }
+        }
+
+        const runOptimization = hasChanges
+          ? shouldReoptimize({ optimize: options.optimize }, config)
+          : Boolean(options.optimize);
+        const canReuseStoredOptimization =
+          !hasChanges && !runOptimization && config.optimized && config.optimizedIR !== undefined;
+
+        let optimized = canReuseStoredOptimization;
+        let optimizedIR = canReuseStoredOptimization ? config.optimizedIR : undefined;
+
+        if (runOptimization) {
+          const optimizeSpinner = spinner();
+          optimizeSpinner.start(
+            `Optimizing in ${config.optimizerMode} mode (target: \u2264${config.maxTools} tools)...`,
+          );
+          const optimizeResult = await optimizeIRWithAI(latest.ir, {
+            mode: config.optimizerMode,
+            maxTools: resolveMaxTools(config.maxTools, config.optimizerMode),
+            logger: (message) => log.warn(message),
+          });
+
+          if (optimizeResult.skipped) {
+            optimizeSpinner.stop("Optimization skipped.");
+            optimized = false;
+            optimizedIR = undefined;
+            log.warn(optimizeResult.reason ?? "Optimization skipped.");
+          } else {
+            optimizeSpinner.stop("Optimization completed.");
+            optimizedIR = optimizeResult.optimizedIR;
+            optimized = true;
+            note(
+              `AI suggested ${optimizeResult.optimizedIR.tools.length} tools for the updated spec.`,
+              "Optimization Result",
+            );
+          }
+        }
+
+        let selectedTools = resolveSelectedToolsForIR(latest.ir, config.selectedTools);
+
+        if (pickerEnabled) {
+          const defaultSelectedTools = optimizedIR
+            ? deriveSuggestedSelectionValues(latest.ir, optimizedIR)
+            : selectedTools;
+          const pickResult = await pickToolsFromIR(latest.ir, {
+            defaultSelectedTools,
+            message: "Select endpoints to regenerate as tools",
+          });
+          selectedTools = pickResult.selectedTools;
+          log.info(
+            `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
           );
         }
-      }
 
-      const generateSpinner = spinner();
-      generateSpinner.start(`Regenerating server in ${outputDir}...`);
-      await generateTypeScriptMCPServer(finalIR, {
-        outputDir,
-        projectName: basename(outputDir),
-      });
-      generateSpinner.stop("Regeneration complete.");
+        const finalIR = buildFinalIR(latest.ir, optimizedIR, optimized, selectedTools);
 
-      const updatedConfig: LoadedConfig = {
-        specSource: config.specSource,
-        sourceType: config.sourceType,
-        apiName: config.apiName,
-        outputDir: config.outputDir,
-        optimized,
-        optimizerMode: config.optimizerMode,
-        maxTools: config.maxTools,
-        ir: finalIR,
-        ...(config.sourceType === "docs-url" ? { scrapedDocs: latest.scrapedDocs } : {}),
-      };
-      await writeFile(configPath, `${JSON.stringify(updatedConfig, null, 2)}\n`, "utf8");
+        const generateSpinner = spinner();
+        generateSpinner.start(`Regenerating server in ${outputDir}...`);
+        await generateTypeScriptMCPServer(finalIR, {
+          outputDir,
+          projectName: basename(outputDir),
+        });
+        generateSpinner.stop("Regeneration complete.");
 
-      note(
-        [
-          `Diff summary: ${result.summary.high} high, ${result.summary.medium} medium, ${result.summary.low} low risk changes.`,
-          `Tool count: ${config.ir.tools.length} -> ${finalIR.tools.length}.`,
-          `Optimization: ${runOptimization ? (optimized ? "applied" : "skipped") : "not run"}.`,
-        ].join("\n"),
-        "Update Summary",
-      );
+        const updatedConfig: MCPForgeConfig = {
+          specSource: config.specSource,
+          sourceType: config.sourceType,
+          apiName: config.apiName,
+          outputDir: config.outputDir,
+          optimized,
+          optimizerMode: config.optimizerMode,
+          maxTools: config.maxTools,
+          selectedTools,
+          ir: finalIR,
+          sourceIR: latest.ir,
+          ...(optimized && optimizedIR ? { optimizedIR } : {}),
+          ...(config.sourceType === "docs-url" ? { scrapedDocs: latest.scrapedDocs } : {}),
+        };
+        await writeConfigFile(configPath, updatedConfig);
 
-      outro(
-        [
-          "Server regenerated successfully.",
-          "",
-          "Rebuild before running:",
-          "npm install && npm run build",
-        ].join("\n"),
-      );
-    });
+        note(
+          [
+            `Diff summary: ${result.summary.high} high, ${result.summary.medium} medium, ${result.summary.low} low risk changes.`,
+            `Selected tools: ${finalIR.tools.length}.`,
+            `Optimization: ${optimized ? "applied" : "not applied"}.`,
+          ].join("\n"),
+          "Update Summary",
+        );
+
+        outro(
+          [
+            "Server regenerated successfully.",
+            "",
+            "Rebuild before running:",
+            "npm install && npm run build",
+          ].join("\n"),
+        );
+      },
+    );
 }

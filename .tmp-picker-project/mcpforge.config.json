@@ -1,0 +1,163 @@
+{
+  "specSource": "C:\\Users\\Lorenzo\\Documents\\Workspace\\mcpforge\\.tmp-pick-openapi.json",
+  "sourceType": "openapi",
+  "apiName": "picker-test-api",
+  "outputDir": ".tmp-picker-project",
+  "optimized": false,
+  "optimizerMode": "strict",
+  "maxTools": 25,
+  "selectedTools": [
+    "listPets",
+    "getPet"
+  ],
+  "ir": {
+    "apiName": "Picker Test API",
+    "apiDescription": "Generated MCP server from OpenAPI specification.",
+    "baseUrl": "https://example.com/api",
+    "auth": {
+      "type": "none",
+      "envVarName": "NO_AUTH",
+      "description": "No authentication scheme detected.",
+      "required": false,
+      "hasSecuritySchemes": false
+    },
+    "tools": [
+      {
+        "name": "list_pets",
+        "description": "List pets updated",
+        "method": "GET",
+        "path": "/pets",
+        "parameters": [],
+        "responseDescription": "A list of pets",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "listPets"
+      },
+      {
+        "name": "get_pet",
+        "description": "Get pet",
+        "method": "GET",
+        "path": "/pets/{petId}",
+        "parameters": [
+          {
+            "name": "petId",
+            "description": "path parameter \"petId\"",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "A pet",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "getPet"
+      }
+    ],
+    "rawEndpointCount": 6
+  },
+  "sourceIR": {
+    "apiName": "Picker Test API",
+    "apiDescription": "Generated MCP server from OpenAPI specification.",
+    "baseUrl": "https://example.com/api",
+    "auth": {
+      "type": "none",
+      "envVarName": "NO_AUTH",
+      "description": "No authentication scheme detected.",
+      "required": false,
+      "hasSecuritySchemes": false
+    },
+    "tools": [
+      {
+        "name": "list_pets",
+        "description": "List pets updated",
+        "method": "GET",
+        "path": "/pets",
+        "parameters": [],
+        "responseDescription": "A list of pets",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "listPets"
+      },
+      {
+        "name": "create_pet",
+        "description": "Create pet",
+        "method": "POST",
+        "path": "/pets",
+        "parameters": [],
+        "responseDescription": "Pet created",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "createPet"
+      },
+      {
+        "name": "get_pet",
+        "description": "Get pet",
+        "method": "GET",
+        "path": "/pets/{petId}",
+        "parameters": [
+          {
+            "name": "petId",
+            "description": "path parameter \"petId\"",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "A pet",
+        "tags": [
+          "pet"
+        ],
+        "originalOperationId": "getPet"
+      },
+      {
+        "name": "list_orders",
+        "description": "List orders",
+        "method": "GET",
+        "path": "/store/orders",
+        "parameters": [],
+        "responseDescription": "A list of orders",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "listOrders"
+      },
+      {
+        "name": "delete_order",
+        "description": "Delete order",
+        "method": "DELETE",
+        "path": "/store/orders/{orderId}",
+        "parameters": [
+          {
+            "name": "orderId",
+            "description": "path parameter \"orderId\"",
+            "type": "string",
+            "required": true,
+            "location": "path"
+          }
+        ],
+        "responseDescription": "Order deleted",
+        "tags": [
+          "store"
+        ],
+        "originalOperationId": "deleteOrder"
+      },
+      {
+        "name": "list_reports",
+        "description": "List reports",
+        "method": "GET",
+        "path": "/admin/reports",
+        "parameters": [],
+        "responseDescription": "A list of reports",
+        "tags": [
+          "admin"
+        ],
+        "originalOperationId": "listReports"
+      }
+    ],
+    "rawEndpointCount": 6
+  }
+}

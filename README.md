@@ -48,11 +48,11 @@ Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI spec
 
 ## Commands
 
-- `mcpforge init <spec>` — Parse a spec, optionally optimize tools, and generate an MCP server project. Use `--from-url` when you only have docs. Use `--optimize` for AI curation. Use `--dry-run` to preview without writing files.
-- `mcpforge generate` — Regenerate from `mcpforge.config.json`. Use `--optimize` to re-run AI optimization.
+- `mcpforge init <spec>` — Parse a spec, optionally optimize tools, and generate an MCP server project. Use `--from-url` when you only have docs. Use `--optimize` for AI curation. Use `--pick` to interactively choose which endpoints become tools, with AI suggestions pre-checked when combined with `--optimize`. Use `--dry-run` to preview without writing files.
+- `mcpforge generate` — Regenerate from `mcpforge.config.json`. Saved tool selections are respected automatically. Use `--optimize` to re-run AI optimization and `--pick` to re-pick tools interactively.
 - `mcpforge inspect <spec>` — Print API summary, endpoint groups by tag, and quality warnings.
 - `mcpforge diff` — Compare current spec against last generation and flag breaking changes with risk scoring (high/medium/low).
-- `mcpforge update` — Check for upstream spec changes and regenerate your server. Shows a diff summary and asks for confirmation on breaking changes.
+- `mcpforge update` — Check for upstream spec changes and regenerate your server. Shows a diff summary and asks for confirmation on breaking changes. Use `--pick` to re-pick tools against the latest spec.
 - `mcpforge test` — Placeholder for upcoming testing workflows.
 
 ## AI Optimization
@@ -75,7 +75,7 @@ Requires `ANTHROPIC_API_KEY`. When missing, optimization is skipped and generati
 
 ## Configuration
 
-Generated projects include `mcpforge.config.json`, which stores the spec source, output directory, optimization mode, and the IR used for generation. Use this file with `mcpforge generate` to regenerate quickly after edits, or with `mcpforge diff` to detect upstream changes.
+Generated projects include `mcpforge.config.json`, which stores the spec source, output directory, optimization mode, saved `selectedTools`, and the IR used for generation. Use this file with `mcpforge generate` to regenerate quickly after edits, or with `mcpforge diff` to detect upstream changes.
 
 ## Tested APIs
 

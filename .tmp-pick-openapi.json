@@ -1,0 +1,104 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Picker Test API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://example.com/api"
+    }
+  ],
+  "paths": {
+    "/pets": {
+      "get": {
+        "tags": ["pet"],
+        "summary": "List pets updated",
+        "operationId": "listPets",
+        "responses": {
+          "200": {
+            "description": "A list of pets"
+          }
+        }
+      },
+      "post": {
+        "tags": ["pet"],
+        "summary": "Create pet",
+        "operationId": "createPet",
+        "responses": {
+          "201": {
+            "description": "Pet created"
+          }
+        }
+      }
+    },
+    "/pets/{petId}": {
+      "get": {
+        "tags": ["pet"],
+        "summary": "Get pet",
+        "operationId": "getPet",
+        "parameters": [
+          {
+            "name": "petId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A pet"
+          }
+        }
+      }
+    },
+    "/store/orders": {
+      "get": {
+        "tags": ["store"],
+        "summary": "List orders",
+        "operationId": "listOrders",
+        "responses": {
+          "200": {
+            "description": "A list of orders"
+          }
+        }
+      }
+    },
+    "/store/orders/{orderId}": {
+      "delete": {
+        "tags": ["store"],
+        "summary": "Delete order",
+        "operationId": "deleteOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Order deleted"
+          }
+        }
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "tags": ["admin"],
+        "summary": "List reports",
+        "operationId": "listReports",
+        "responses": {
+          "200": {
+            "description": "A list of reports"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -175,6 +175,21 @@ async function writeRenderedFile(
   await writeFile(outputPath, rendered, "utf8");
 }
 
+async function removeStaleToolFiles(toolsDir: string, nextToolNames: string[]): Promise<void> {
+  if (!existsSync(toolsDir)) {
+    return;
+  }
+
+  const expectedFiles = new Set(nextToolNames.map((toolName) => `${toolName}.ts`));
+  const existingFiles = await readdir(toolsDir, { withFileTypes: true });
+
+  await Promise.all(
+    existingFiles
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts") && !expectedFiles.has(entry.name))
+      .map((entry) => unlink(join(toolsDir, entry.name))),
+  );
+}
+
 export async function generateTypeScriptMCPServer(
   ir: MCPForgeIR,
   options: GenerateProjectOptions,
@@ -192,6 +207,10 @@ export async function generateTypeScriptMCPServer(
   const preparedTools = prepareTools(ir);
   const hasAuth = ir.auth.type !== "none";
   const authRequired = hasAuth && ir.auth.required === true;
+  await removeStaleToolFiles(
+    toolsDir,
+    preparedTools.map((tool) => tool.handlerFileName),
+  );
   const commonTemplateData = {
     projectName,
     apiName: ir.apiName,

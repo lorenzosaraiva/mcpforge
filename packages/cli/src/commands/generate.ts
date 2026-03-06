@@ -1,42 +1,32 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
 import {
-  type MCPForgeIR,
   generateTypeScriptMCPServer,
   optimizeIRWithAI,
+  type MCPForgeIR,
+  type OptimizerMode,
 } from "../core.js";
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
-import { z } from "zod";
 
-const ConfigSchema = z.object({
-  specSource: z.string(),
-  sourceType: z.enum(["openapi", "docs-url"]).optional(),
-  apiName: z.string(),
-  outputDir: z.string().default("."),
-  optimized: z.boolean().default(false),
-  optimizerMode: z.enum(["strict", "standard"]).optional(),
-  maxTools: z.number().int().positive().optional(),
-  scrapedDocs: z
-    .array(
-      z.object({
-        url: z.string(),
-        content: z.string(),
-      }),
-    )
-    .optional(),
-  ir: z.unknown(),
-});
+import { loadConfig, type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
+import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import {
+  applyOptimizedToolSuggestions,
+  deriveSuggestedSelectionValues,
+  filterIRBySelectedTools,
+  resolveSelectedToolsForIR,
+} from "../utils/tool-selection.js";
+import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
 const DEFAULT_STANDARD_MAX_TOOLS = 80;
 
 function resolveOptimizationMode(
   options: { strict?: boolean; standard?: boolean },
-  configuredMode?: "strict" | "standard",
-): "strict" | "standard" {
+  configuredMode?: OptimizerMode,
+): OptimizerMode {
   if (options.strict && options.standard) {
     throw new Error("Use either --strict or --standard, not both.");
   }
@@ -51,7 +41,7 @@ function resolveOptimizationMode(
 
 function resolveMaxTools(
   rawValue: string | undefined,
-  mode: "strict" | "standard",
+  mode: OptimizerMode,
   configuredMaxTools?: number,
 ): number {
   if (rawValue !== undefined) {
@@ -80,6 +70,18 @@ function resolveOutputDirectory(configOutputDir: string, configDir: string): str
   return resolve(configDir, configOutputDir || ".");
 }
 
+function buildFinalIR(
+  sourceIR: MCPForgeIR,
+  optimizedIR: MCPForgeIR | undefined,
+  optimized: boolean,
+  selectedTools: readonly string[],
+): MCPForgeIR {
+  return filterIRBySelectedTools(
+    applyOptimizedToolSuggestions(sourceIR, optimized ? optimizedIR : undefined),
+    selectedTools,
+  );
+}
+
 export function registerGenerateCommand(program: Command): void {
   program
     .command("generate")
@@ -88,67 +90,115 @@ export function registerGenerateCommand(program: Command): void {
     .option("--strict", "Use strict optimization mode (aggressive curation)")
     .option("--standard", "Use standard optimization mode (broader tool coverage)")
     .option("--max-tools <number>", "Set max tools target for optimization mode")
-    .action(async (options: { optimize?: boolean; strict?: boolean; standard?: boolean; maxTools?: string }) => {
-      intro("mcpforge generate");
+    .option("--pick", "Interactively re-pick which endpoints become tools")
+    .action(
+      async (
+        options: {
+          optimize?: boolean;
+          strict?: boolean;
+          standard?: boolean;
+          maxTools?: string;
+          pick?: boolean;
+        },
+      ) => {
+        intro("mcpforge generate");
 
-      const configDir = process.cwd();
-      const configPath = join(configDir, "mcpforge.config.json");
+        const configDir = process.cwd();
+        const configPath = join(configDir, "mcpforge.config.json");
 
-      if (!existsSync(configPath)) {
-        throw new Error("mcpforge.config.json not found in current directory.");
-      }
-
-      const configSpinner = spinner();
-      configSpinner.start("Loading mcpforge config...");
-      const rawConfig = await readFile(configPath, "utf8");
-      const parsedConfig = ConfigSchema.parse(JSON.parse(rawConfig));
-      configSpinner.stop("Config loaded.");
-
-      let ir = parsedConfig.ir as MCPForgeIR;
-      let optimized = parsedConfig.optimized;
-      const optimizerMode = resolveOptimizationMode(options, parsedConfig.optimizerMode);
-      const maxTools = resolveMaxTools(options.maxTools, optimizerMode, parsedConfig.maxTools);
-
-      if (options.optimize) {
-        const optimizeSpinner = spinner();
-        optimizeSpinner.start(
-          `Optimizing in ${optimizerMode} mode (target: \u2264${maxTools} tools)...`,
-        );
-        const result = await optimizeIRWithAI(ir, {
-          mode: optimizerMode,
-          maxTools,
-          logger: (message) => log.warn(message),
-        });
-
-        if (result.skipped) {
-          optimizeSpinner.stop("Optimization skipped.");
-          log.warn(result.reason ?? "Optimization skipped.");
-        } else {
-          ir = result.optimizedIR;
-          optimized = true;
-          optimizeSpinner.stop("Optimization completed.");
-          note(`Tool count: ${result.optimizedIR.tools.length}`, "Optimization Result");
+        if (!existsSync(configPath)) {
+          throw new Error("mcpforge.config.json not found in current directory.");
         }
-      }
 
-      const outputDir = resolveOutputDirectory(parsedConfig.outputDir, configDir);
-      const generateSpinner = spinner();
-      generateSpinner.start(`Generating server in ${outputDir}...`);
-      await generateTypeScriptMCPServer(ir, {
-        outputDir,
-        projectName: basename(outputDir),
-      });
-      generateSpinner.stop("Regeneration complete.");
+        const configSpinner = spinner();
+        configSpinner.start("Loading mcpforge config...");
+        const config = await loadConfig(configPath);
+        configSpinner.stop("Config loaded.");
 
-      const updatedConfig = {
-        ...parsedConfig,
-        optimized,
-        optimizerMode,
-        maxTools,
-        ir,
-      };
-      await writeFile(configPath, `${JSON.stringify(updatedConfig, null, 2)}\n`, "utf8");
+        const optimizerMode = resolveOptimizationMode(options, config.optimizerMode);
+        const maxTools = resolveMaxTools(options.maxTools, optimizerMode, config.maxTools);
 
-      outro("Project regenerated successfully.");
-    });
+        let optimized = config.optimized;
+        let optimizedIR = config.optimizedIR;
+        const sourceIR = config.sourceIR;
+
+        if (options.optimize) {
+          const optimizeSpinner = spinner();
+          optimizeSpinner.start(
+            `Optimizing in ${optimizerMode} mode (target: \u2264${maxTools} tools)...`,
+          );
+          const result = await optimizeIRWithAI(sourceIR, {
+            mode: optimizerMode,
+            maxTools,
+            logger: (message) => log.warn(message),
+          });
+
+          if (result.skipped) {
+            optimizeSpinner.stop("Optimization skipped.");
+            log.warn(result.reason ?? "Optimization skipped.");
+          } else {
+            optimizedIR = result.optimizedIR;
+            optimized = true;
+            optimizeSpinner.stop("Optimization completed.");
+            note(`AI suggested ${result.optimizedIR.tools.length} tools.`, "Optimization Result");
+          }
+        }
+
+        let selectedTools = resolveSelectedToolsForIR(sourceIR, config.selectedTools);
+
+        if (options.pick) {
+          if (isNonInteractiveRuntime()) {
+            log.warn("Non-interactive mode detected. Ignoring --pick.");
+          } else {
+            if (!config.hasSourceIR) {
+              log.warn(
+                "This config predates full source IR storage. Re-pick is limited to the currently stored tool list.",
+              );
+            }
+
+            const defaultSelectedTools =
+              options.optimize && optimizedIR
+                ? deriveSuggestedSelectionValues(sourceIR, optimizedIR)
+                : selectedTools;
+            const pickResult = await pickToolsFromIR(sourceIR, {
+              defaultSelectedTools,
+              message: "Select endpoints to regenerate as tools",
+            });
+            selectedTools = pickResult.selectedTools;
+            log.info(
+              `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+            );
+          }
+        }
+
+        const finalIR = buildFinalIR(sourceIR, optimizedIR, optimized, selectedTools);
+
+        const outputDir = resolveOutputDirectory(config.outputDir, configDir);
+        const generateSpinner = spinner();
+        generateSpinner.start(`Generating server in ${outputDir}...`);
+        await generateTypeScriptMCPServer(finalIR, {
+          outputDir,
+          projectName: basename(outputDir),
+        });
+        generateSpinner.stop("Regeneration complete.");
+
+        const updatedConfig: MCPForgeConfig = {
+          specSource: config.specSource,
+          sourceType: config.sourceType,
+          apiName: config.apiName,
+          outputDir: config.outputDir,
+          optimized,
+          optimizerMode,
+          maxTools,
+          selectedTools,
+          ir: finalIR,
+          sourceIR,
+          ...(optimized && optimizedIR ? { optimizedIR } : {}),
+          ...(config.scrapedDocs ? { scrapedDocs: config.scrapedDocs } : {}),
+        };
+        await writeConfigFile(configPath, updatedConfig);
+
+        outro("Project regenerated successfully.");
+      },
+    );
 }
