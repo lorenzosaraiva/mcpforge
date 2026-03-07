@@ -15,6 +15,7 @@ export default defineConfig({
     "@anthropic-ai/sdk",
     "@apidevtools/swagger-parser",
     "@clack/prompts",
+    "@modelcontextprotocol/sdk",
     "commander",
     "handlebars",
     "zod",

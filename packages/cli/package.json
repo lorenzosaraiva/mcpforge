@@ -1,6 +1,6 @@
 {
   "name": "mcpforge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.67.0",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@clack/prompts": "^0.11.0",
+    "@modelcontextprotocol/sdk": "^1.19.0",
     "commander": "^14.0.1",
     "handlebars": "^4.7.8",
     "zod": "^4.1.8"
