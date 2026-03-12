@@ -1,7 +1,7 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { intro, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
-import { parseOpenAPISpec, type ToolDefinition } from "../core.js";
+import { isEndpointTool, parseOpenAPISpec, planWorkflowTools, type ToolDefinition } from "../core.js";
 
 function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -85,7 +85,11 @@ function buildTagSummary(tools: ToolDefinition[]): string {
     const groupTools = grouped.get(tag) ?? [];
     lines.push(`${tag} (${groupTools.length})`);
     for (const tool of groupTools) {
-      lines.push(`  - ${tool.method} ${tool.path} (${tool.name})`);
+      lines.push(
+        isEndpointTool(tool)
+          ? `  - ${tool.method} ${tool.path} (${tool.name})`
+          : `  - WORKFLOW ${tool.name}`,
+      );
     }
   }
 
@@ -94,8 +98,9 @@ function buildTagSummary(tools: ToolDefinition[]): string {
 
 function buildWarnings(tools: ToolDefinition[]): string[] {
   const warnings: string[] = [];
+  const endpointTools = tools.filter((tool) => isEndpointTool(tool));
 
-  const missingDescriptions = tools.filter(
+  const missingDescriptions = endpointTools.filter(
     (tool) => tool.description.trim().toUpperCase() === `${tool.method.toUpperCase()} ${tool.path}`.toUpperCase(),
   );
   if (missingDescriptions.length > 0) {
@@ -104,19 +109,19 @@ function buildWarnings(tools: ToolDefinition[]): string[] {
     );
   }
 
-  const missingOperationIds = tools.filter((tool) => !tool.originalOperationId);
+  const missingOperationIds = endpointTools.filter((tool) => !tool.originalOperationId);
   if (missingOperationIds.length > 0) {
     warnings.push(`${missingOperationIds.length} endpoint(s) are missing operationId.`);
   }
 
-  const tooManyParams = tools.filter((tool) => tool.parameters.length >= 20);
+  const tooManyParams = endpointTools.filter((tool) => tool.parameters.length >= 20);
   if (tooManyParams.length > 0) {
     warnings.push(
       `${tooManyParams.length} tool(s) have 20+ parameters and are likely too complex for LLMs.`,
     );
   }
 
-  const complexSchemas = tools.filter((tool) => {
+  const complexSchemas = endpointTools.filter((tool) => {
     if (!tool.requestBody) {
       return false;
     }
@@ -137,7 +142,8 @@ export function registerInspectCommand(program: Command): void {
     .command("inspect")
     .argument("<spec>", "OpenAPI spec URL or local file path")
     .description("Inspect a spec and print API summary, endpoint groups, and quality warnings")
-    .action(async (spec: string) => {
+    .option("--workflows", "Preview the task-oriented workflow plan for this API")
+    .action(async (spec: string, options: { workflows?: boolean }) => {
       intro("mcpforge inspect");
 
       const parseSpinner = spinner();
@@ -163,6 +169,24 @@ export function registerInspectCommand(program: Command): void {
         note(warnings.map((warning) => `- ${warning}`).join("\n"), "Warnings");
       } else {
         note("No major warnings detected.", "Warnings");
+      }
+
+      if (options.workflows) {
+        const plannedIR = planWorkflowTools(ir);
+        const lines = plannedIR.tools.map((tool) =>
+          isEndpointTool(tool)
+            ? `- [ENDPOINT] ${tool.name}: ${tool.method} ${tool.path}`
+            : `- [WORKFLOW] ${tool.name}: depends on ${tool.dependsOnOperationIds.join(", ")}`,
+        );
+        note(
+          [
+            `Planned public tools: ${plannedIR.tools.length}`,
+            `Workflow tools: ${plannedIR.tools.filter((tool) => tool.kind === "workflow").length}`,
+            "",
+            ...lines,
+          ].join("\n"),
+          "Workflow Plan",
+        );
       }
 
       outro("Inspection complete.");

@@ -5,19 +5,22 @@ import { fileURLToPath } from "node:url";
 
 import Handlebars from "handlebars";
 
-import type { MCPForgeIR, ToolDefinition } from "../parser/types.js";
+import type {
+  EndpointToolDefinition,
+  MCPForgeIR,
+  ToolDefinition,
+  WorkflowStepDefinition,
+  WorkflowToolDefinition,
+} from "../parser/types.js";
+import { isEndpointTool, isWorkflowTool } from "../parser/types.js";
 import type { GenerateProjectOptions, GenerateProjectResult } from "./types.js";
 import { toJsonSchema, toKebabCase } from "../utils/schema-utils.js";
 
-interface PreparedTool {
+interface PreparedEndpointRuntime {
   name: string;
-  description: string;
+  operationId?: string;
   method: string;
   path: string;
-  tags: string[];
-  inputSchema: Record<string, unknown>;
-  handlerFunctionName: string;
-  handlerFileName: string;
   pathParams: Array<{ name: string; token: string }>;
   hasPathParams: boolean;
   queryParams: Array<{ name: string; required: boolean }>;
@@ -28,6 +31,36 @@ interface PreparedTool {
   requestBodyRequired: boolean;
   requestBodyContentType: string;
 }
+
+interface PreparedPublicToolBase {
+  kind: "endpoint" | "workflow";
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  handlerFunctionName: string;
+  handlerFileName: string;
+}
+
+interface PreparedEndpointTool extends PreparedPublicToolBase {
+  kind: "endpoint";
+  endpoint: PreparedEndpointRuntime;
+}
+
+interface PreparedWorkflowStep {
+  id: string;
+  saveAs?: string;
+  args: Record<string, unknown>;
+  endpoint: PreparedEndpointRuntime;
+}
+
+interface PreparedWorkflowTool extends PreparedPublicToolBase {
+  kind: "workflow";
+  steps: PreparedWorkflowStep[];
+  output?: unknown;
+  hasOutput: boolean;
+}
+
+type PreparedPublicTool = PreparedEndpointTool | PreparedWorkflowTool;
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
@@ -79,15 +112,15 @@ async function renderTemplate(templatePath: string, data: Record<string, unknown
   return template(data);
 }
 
-function toInputSchema(tool: ToolDefinition): Record<string, unknown> {
-  const normalizeType = (type: string): string => {
-    const normalized = type.toLowerCase();
-    if (["string", "number", "integer", "boolean", "object", "array", "null"].includes(normalized)) {
-      return normalized;
-    }
-    return "string";
-  };
+function normalizeType(type: string): string {
+  const normalized = type.toLowerCase();
+  if (["string", "number", "integer", "boolean", "object", "array", "null"].includes(normalized)) {
+    return normalized;
+  }
+  return "string";
+}
 
+function toEndpointInputSchema(tool: EndpointToolDefinition): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
@@ -130,37 +163,105 @@ function toInputSchema(tool: ToolDefinition): Record<string, unknown> {
   return JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
 }
 
-function prepareTools(ir: MCPForgeIR): PreparedTool[] {
-  return ir.tools.map((tool) => {
-    const handlerFunctionName = `handle${toPascalCase(tool.name)}`;
-    const pathParams = tool.parameters
-      .filter((param) => param.location === "path")
-      .map((param) => ({ name: param.name, token: `{${param.name}}` }));
-    const queryParams = tool.parameters
-      .filter((param) => param.location === "query")
-      .map((param) => ({ name: param.name, required: param.required }));
-    const headerParams = tool.parameters
-      .filter((param) => param.location === "header")
-      .map((param) => ({ name: param.name, required: param.required }));
+function toPreparedEndpointRuntime(tool: EndpointToolDefinition): PreparedEndpointRuntime {
+  const pathParams = tool.parameters
+    .filter((param) => param.location === "path")
+    .map((param) => ({ name: param.name, token: `{${param.name}}` }));
+  const queryParams = tool.parameters
+    .filter((param) => param.location === "query")
+    .map((param) => ({ name: param.name, required: param.required }));
+  const headerParams = tool.parameters
+    .filter((param) => param.location === "header")
+    .map((param) => ({ name: param.name, required: param.required }));
+
+  return {
+    name: tool.name,
+    operationId: tool.originalOperationId,
+    method: tool.method.toUpperCase(),
+    path: tool.path,
+    pathParams,
+    hasPathParams: pathParams.length > 0,
+    queryParams,
+    hasQueryParams: queryParams.length > 0,
+    headerParams,
+    hasHeaderParams: headerParams.length > 0,
+    hasRequestBody: Boolean(tool.requestBody),
+    requestBodyRequired: tool.requestBody?.required === true,
+    requestBodyContentType: tool.requestBody?.contentType ?? "application/json",
+  };
+}
+
+function createPreparedToolBase(
+  tool: ToolDefinition,
+  inputSchema: Record<string, unknown>,
+): PreparedPublicToolBase {
+  return {
+    kind: tool.kind,
+    name: tool.name,
+    description: tool.description,
+    inputSchema,
+    handlerFunctionName: `handle${toPascalCase(tool.name)}`,
+    handlerFileName: tool.name,
+  };
+}
+
+function resolveEndpointMap(ir: MCPForgeIR, sourceIR?: MCPForgeIR): Map<string, EndpointToolDefinition> {
+  const endpointMap = new Map<string, EndpointToolDefinition>();
+  const endpointTools = [
+    ...(sourceIR?.tools ?? []),
+    ...ir.tools,
+  ].filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
+
+  for (const tool of endpointTools) {
+    if (tool.originalOperationId) {
+      endpointMap.set(tool.originalOperationId, tool);
+    }
+    endpointMap.set(tool.name, tool);
+  }
+
+  return endpointMap;
+}
+
+function prepareWorkflowSteps(
+  workflow: WorkflowToolDefinition,
+  endpointMap: Map<string, EndpointToolDefinition>,
+): PreparedWorkflowStep[] {
+  return workflow.steps.map((step: WorkflowStepDefinition) => {
+    const endpointTool = endpointMap.get(step.operationId);
+    if (!endpointTool) {
+      throw new Error(
+        `Workflow tool "${workflow.name}" depends on unknown operation "${step.operationId}".`,
+      );
+    }
 
     return {
-      name: tool.name,
-      description: tool.description,
-      method: tool.method.toUpperCase(),
-      path: tool.path,
-      tags: tool.tags,
-      inputSchema: toInputSchema(tool),
-      handlerFunctionName,
-      handlerFileName: tool.name,
-      pathParams,
-      hasPathParams: pathParams.length > 0,
-      queryParams,
-      hasQueryParams: queryParams.length > 0,
-      headerParams,
-      hasHeaderParams: headerParams.length > 0,
-      hasRequestBody: Boolean(tool.requestBody),
-      requestBodyRequired: tool.requestBody?.required === true,
-      requestBodyContentType: tool.requestBody?.contentType ?? "application/json",
+      id: step.id,
+      saveAs: step.saveAs,
+      args: step.args,
+      endpoint: toPreparedEndpointRuntime(endpointTool),
+    };
+  });
+}
+
+function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPublicTool[] {
+  const endpointMap = resolveEndpointMap(ir, sourceIR);
+
+  return ir.tools.map((tool) => {
+    if (isEndpointTool(tool)) {
+      return {
+        ...createPreparedToolBase(tool, toEndpointInputSchema(tool)),
+        kind: "endpoint",
+        endpoint: toPreparedEndpointRuntime(tool),
+      };
+    }
+
+    const workflowInputSchema = JSON.parse(JSON.stringify(tool.inputSchema)) as Record<string, unknown>;
+    return {
+      ...createPreparedToolBase(tool, workflowInputSchema),
+      kind: "workflow",
+      steps: prepareWorkflowSteps(tool, endpointMap),
+      output: tool.output,
+      hasOutput: tool.output !== undefined,
     };
   });
 }
@@ -204,7 +305,7 @@ export async function generateTypeScriptMCPServer(
   await mkdir(toolsDir, { recursive: true });
 
   const projectName = options.projectName ?? `mcp-server-${toKebabCase(ir.apiName)}`;
-  const preparedTools = prepareTools(ir);
+  const preparedTools = preparePublicTools(ir, options.sourceIR);
   const hasAuth = ir.auth.type !== "none";
   const authRequired = hasAuth && ir.auth.required === true;
   await removeStaleToolFiles(
@@ -221,6 +322,8 @@ export async function generateTypeScriptMCPServer(
     authRequired,
     authOptional: hasAuth && !authRequired,
     tools: preparedTools,
+    workflowToolCount: preparedTools.filter((tool) => tool.kind === "workflow").length,
+    endpointToolCount: preparedTools.filter((tool) => tool.kind === "endpoint").length,
     generatedAt: new Date().toISOString(),
   };
 
@@ -229,6 +332,13 @@ export async function generateTypeScriptMCPServer(
   await writeRenderedFile(
     join(srcDir, "index.ts"),
     join(templateDir, "index.ts.hbs"),
+    commonTemplateData,
+  );
+  fileCount += 1;
+
+  await writeRenderedFile(
+    join(srcDir, "runtime.ts"),
+    join(templateDir, "runtime.ts.hbs"),
     commonTemplateData,
   );
   fileCount += 1;
@@ -269,20 +379,23 @@ export async function generateTypeScriptMCPServer(
   );
   fileCount += 1;
 
-  // Avoid EMFILE on large specs by batching tool-file writes.
   const TOOL_WRITE_CONCURRENCY = 16;
   for (let index = 0; index < preparedTools.length; index += TOOL_WRITE_CONCURRENCY) {
     const batch = preparedTools.slice(index, index + TOOL_WRITE_CONCURRENCY);
     await Promise.all(
       batch.map((tool) =>
-      writeRenderedFile(
-        join(toolsDir, `${tool.handlerFileName}.ts`),
-        join(templateDir, "tool-handler.ts.hbs"),
-        {
-          ...commonTemplateData,
-          tool,
-        },
-      )),
+        writeRenderedFile(
+          join(toolsDir, `${tool.handlerFileName}.ts`),
+          join(
+            templateDir,
+            tool.kind === "workflow" ? "workflow-handler.ts.hbs" : "tool-handler.ts.hbs",
+          ),
+          {
+            ...commonTemplateData,
+            tool,
+          },
+        ),
+      ),
     );
     fileCount += batch.length;
   }

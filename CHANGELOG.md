@@ -2,6 +2,10 @@
 
 ## 0.2.0 (unreleased)
 
+- Added task-oriented workflow planning with `--workflows`, including deterministic workflow execution in generated servers.
+- Added workflow-aware regeneration, diffing, and update impact reporting.
+- Added generated-server runtime support for workflow handlers plus endpoint fallbacks.
+- Added repo-level Vitest coverage and a GitHub Actions CI workflow.
 - Added interactive `--pick` support to `init`, `generate`, and `update`, including large-API tag picking and optimizer-backed default selections.
 - Persisted `selectedTools` plus source/optimized IR snapshots in config so later regenerations keep the chosen tool subset.
 - Added optimizer `strict` mode as the default behavior.

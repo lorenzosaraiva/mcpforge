@@ -7,6 +7,7 @@ export interface GenerateProjectOptions {
   specSource?: string;
   optimized?: boolean;
   irForConfig?: MCPForgeIR;
+  sourceIR?: MCPForgeIR;
 }
 
 export interface GenerateProjectResult {

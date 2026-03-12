@@ -1,34 +1,21 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
   diffIR,
   inferIRFromDocs,
+  isEndpointTool,
+  isWorkflowTool,
   parseOpenAPISpec,
   scrapeDocsFromUrl,
   type DiffChange,
   type DiffResult,
   type MCPForgeIR,
-  type ScrapedDocPage,
 } from "../core.js";
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
-import { z } from "zod";
-
-const ConfigSchema = z.object({
-  specSource: z.string(),
-  sourceType: z.enum(["openapi", "docs-url"]).optional(),
-  scrapedDocs: z
-    .array(
-      z.object({
-        url: z.string(),
-        content: z.string(),
-      }),
-    )
-    .optional(),
-  ir: z.unknown(),
-});
+import { loadConfig, type LoadedMCPForgeConfig } from "../utils/config.js";
 
 const RiskOrder: Record<DiffChange["risk"], number> = {
   high: 0,
@@ -107,27 +94,8 @@ function buildMarkdownReport(result: DiffResult, specSource: string): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-async function loadConfig(configPath: string): Promise<{
-  specSource: string;
-  sourceType: "openapi" | "docs-url";
-  scrapedDocs?: ScrapedDocPage[];
-  ir: MCPForgeIR;
-}> {
-  const rawConfig = await readFile(configPath, "utf8");
-  const parsedConfig = ConfigSchema.parse(JSON.parse(rawConfig));
-  return {
-    specSource: parsedConfig.specSource,
-    sourceType: parsedConfig.sourceType ?? "openapi",
-    scrapedDocs: parsedConfig.scrapedDocs as ScrapedDocPage[] | undefined,
-    ir: parsedConfig.ir as MCPForgeIR,
-  };
-}
-
 async function parseLatestIRFromSource(
-  config: {
-    specSource: string;
-    sourceType: "openapi" | "docs-url";
-  },
+  config: LoadedMCPForgeConfig,
   logger: (message: string) => void,
 ): Promise<MCPForgeIR> {
   if (config.sourceType === "docs-url") {
@@ -189,6 +157,49 @@ function printFormattedDiff(result: DiffResult): void {
   }
 }
 
+function resolveChangedOperationIds(
+  oldIR: MCPForgeIR,
+  newIR: MCPForgeIR,
+  result: DiffResult,
+): Set<string> {
+  const changed = new Set<string>();
+  const candidates = [...oldIR.tools, ...newIR.tools].filter((tool) => isEndpointTool(tool));
+
+  for (const change of result.changes) {
+    for (const tool of candidates) {
+      const matchesMethodPath =
+        tool.method.toUpperCase() === change.method.toUpperCase() && tool.path === change.path;
+      const matchesName = tool.name === change.toolName;
+      if (!matchesMethodPath && !matchesName) {
+        continue;
+      }
+
+      changed.add(tool.originalOperationId ?? tool.name);
+    }
+  }
+
+  return changed;
+}
+
+function resolveWorkflowImpacts(
+  currentIR: MCPForgeIR,
+  oldSourceIR: MCPForgeIR,
+  newSourceIR: MCPForgeIR,
+  result: DiffResult,
+): string[] {
+  const changedOperationIds = resolveChangedOperationIds(oldSourceIR, newSourceIR, result);
+  return currentIR.tools
+    .filter(
+      (tool) =>
+        isWorkflowTool(tool) &&
+        tool.dependsOnOperationIds.some((operationId) => changedOperationIds.has(operationId)),
+    )
+    .map(
+      (tool) =>
+        `${tool.name}: ${tool.dependsOnOperationIds.filter((operationId) => changedOperationIds.has(operationId)).join(", ")}`,
+    );
+}
+
 export function registerDiffCommand(program: Command): void {
   program
     .command("diff")
@@ -204,18 +215,23 @@ export function registerDiffCommand(program: Command): void {
       if (options.json) {
         const config = await loadConfig(configPath);
         const newIR = await parseLatestIRFromSource(config, () => {});
-        const rawResult = diffIR(config.ir, newIR);
+        const rawResult = diffIR(config.sourceIR, newIR);
         const result = {
           ...rawResult,
           changes: sortChanges(rawResult.changes),
         };
+        const workflowImpacts = config.workflowEnabled
+          ? resolveWorkflowImpacts(config.ir, config.sourceIR, newIR, result)
+          : [];
 
         if (options.output) {
           const outputPath = resolve(process.cwd(), options.output);
           await writeFile(outputPath, buildMarkdownReport(result, config.specSource), "utf8");
         }
 
-        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.stdout.write(
+          `${JSON.stringify({ ...result, workflowImpacts }, null, 2)}\n`,
+        );
         return;
       }
 
@@ -239,12 +255,15 @@ export function registerDiffCommand(program: Command): void {
 
       const diffSpinner = spinner();
       diffSpinner.start("Comparing previous and current IR...");
-      const rawResult = diffIR(config.ir, newIR);
+      const rawResult = diffIR(config.sourceIR, newIR);
       const result = {
         ...rawResult,
         changes: sortChanges(rawResult.changes),
       };
       diffSpinner.stop("Diff completed.");
+      const workflowImpacts = config.workflowEnabled
+        ? resolveWorkflowImpacts(config.ir, config.sourceIR, newIR, result)
+        : [];
 
       if (options.output) {
         const outputPath = resolve(process.cwd(), options.output);
@@ -258,6 +277,13 @@ export function registerDiffCommand(program: Command): void {
       }
 
       printFormattedDiff(result);
+
+      if (workflowImpacts.length > 0) {
+        note(
+          workflowImpacts.map((line) => `- ${line}`).join("\n"),
+          `Workflow Impact (${workflowImpacts.length})`,
+        );
+      }
 
       if (result.summary.high > 0) {
         log.warn("\u26A0\uFE0F Breaking changes detected. Review before regenerating.");

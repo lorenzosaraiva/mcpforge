@@ -1,0 +1,44 @@
+import {
+  type ToolHandlerContext,
+  invokeEndpoint,
+  resolveWorkflowValue,
+  selectWorkflowOutput,
+} from "../runtime.js";
+
+const WORKFLOW_STEPS = {{{json tool.steps}}} as Array<{
+  id: string;
+  saveAs?: string;
+  args: Record<string, unknown>;
+  endpoint: import("../runtime.js").EndpointRuntimeDefinition;
+}>;
+
+{{#if tool.hasOutput}}
+const WORKFLOW_OUTPUT = {{{json tool.output}}};
+{{/if}}
+
+export async function {{tool.handlerFunctionName}}(
+  input: Record<string, unknown>,
+  context: ToolHandlerContext,
+): Promise<unknown> {
+  const stepResults: Record<string, unknown> = {};
+  let lastResult: unknown = null;
+
+  for (const step of WORKFLOW_STEPS) {
+    const resolvedArgs = resolveWorkflowValue(step.args, input, stepResults);
+    const endpointInput =
+      resolvedArgs && typeof resolvedArgs === "object" && !Array.isArray(resolvedArgs)
+        ? (resolvedArgs as Record<string, unknown>)
+        : {};
+    lastResult = await invokeEndpoint(step.endpoint, endpointInput, context);
+    stepResults[step.id] = lastResult;
+    if (step.saveAs) {
+      stepResults[step.saveAs] = lastResult;
+    }
+  }
+
+{{#if tool.hasOutput}}
+  return selectWorkflowOutput(WORKFLOW_OUTPUT, lastResult, stepResults, input);
+{{else}}
+  return lastResult;
+{{/if}}
+}

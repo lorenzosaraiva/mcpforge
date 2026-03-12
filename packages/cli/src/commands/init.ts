@@ -16,10 +16,8 @@ import type { Command } from "commander";
 import { type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
 import { promptConfirm, promptText } from "../utils/prompts.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  applyOptimizedToolSuggestions,
-  deriveSuggestedSelectionValues,
-  filterIRBySelectedTools,
   getAllToolSelectionValues,
 } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
@@ -58,7 +56,9 @@ function resolveMaxTools(
 function summarizeTools(ir: MCPForgeIR): string {
   const lines = ir.tools.map(
     (tool, index) =>
-      `${index + 1}. ${tool.name}\n   ${tool.method} ${tool.path}\n   ${tool.description}`,
+      tool.kind === "endpoint"
+        ? `${index + 1}. ${tool.name}\n   ${tool.method} ${tool.path}\n   ${tool.description}`
+        : `${index + 1}. ${tool.name}\n   WORKFLOW (${tool.dependsOnOperationIds.length} step dependency)\n   ${tool.description}`,
   );
   return lines.join("\n");
 }
@@ -93,6 +93,8 @@ export function registerInitCommand(program: Command): void {
     .option("--standard", "Use standard optimization mode (broader tool coverage)")
     .option("--max-tools <number>", "Set max tools target for optimization mode")
     .option("--pick", "Interactively select which endpoints become tools")
+    .option("--workflows", "Generate task-oriented workflow tools instead of only raw endpoint tools")
+    .option("--raw-endpoints", "Disable workflow planning and keep endpoint tools only")
     .option("-o, --output <dir>", "Output directory for generated project")
     .option("--dry-run", "Parse and optimize, then print tool summary without writing files")
     .action(
@@ -107,6 +109,8 @@ export function registerInitCommand(program: Command): void {
           standard?: boolean;
           maxTools?: string;
           pick?: boolean;
+          workflows?: boolean;
+          rawEndpoints?: boolean;
         },
       ) => {
       intro("mcpforge init");
@@ -203,30 +207,58 @@ export function registerInitCommand(program: Command): void {
         }
       }
 
-      const defaultSelectedTools = optimizedIR
-        ? deriveSuggestedSelectionValues(parsedIR, optimizedIR)
-        : getAllToolSelectionValues(parsedIR);
+      if (options.workflows && options.rawEndpoints) {
+        throw new Error("Use either --workflows or --raw-endpoints, not both.");
+      }
+
+      const workflowEnabled =
+        options.workflows ??
+        (options.rawEndpoints
+          ? false
+          : isNonInteractiveRuntime()
+            ? false
+            : await promptConfirm("Generate task-oriented workflow tools?", true));
+
+      const candidateIR = buildCandidateIR({
+        sourceIR: parsedIR,
+        optimizedIR,
+        workflowEnabled,
+        maxTools,
+      });
+
+      const defaultSelectedTools = workflowEnabled
+        ? getAllToolSelectionValues(candidateIR)
+        : getDefaultSelectedTools({
+            sourceIR: parsedIR,
+            optimizedIR,
+          });
       let selectedTools = defaultSelectedTools;
 
       if (options.pick) {
         if (isNonInteractiveRuntime()) {
           log.warn("Non-interactive mode detected. Ignoring --pick.");
         } else {
-          const pickResult = await pickToolsFromIR(parsedIR, {
+          const pickResult = await pickToolsFromIR(candidateIR, {
             defaultSelectedTools,
-            message: "Select endpoints to generate as tools",
+            message: workflowEnabled
+              ? "Select workflow and fallback tools to generate"
+              : "Select endpoints to generate as tools",
           });
           selectedTools = pickResult.selectedTools;
           log.info(
-            `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+            `Selected ${selectedTools.length} tool(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
           );
         }
       }
 
-      const finalIR = filterIRBySelectedTools(
-        applyOptimizedToolSuggestions(parsedIR, optimizedIR),
+      const finalIR = buildFinalIR({
+        sourceIR: parsedIR,
+        optimizedIR,
+        workflowEnabled,
+        maxTools,
         selectedTools,
-      );
+      });
+      const workflowCount = finalIR.tools.filter((tool) => tool.kind === "workflow").length;
 
       if (options.dryRun) {
         note(
@@ -234,9 +266,11 @@ export function registerInitCommand(program: Command): void {
             `Source type: ${sourceType}`,
             `Raw endpoints: ${parsedIR.rawEndpointCount}`,
             `Selected tools: ${finalIR.tools.length}`,
+            `Workflow tools: ${workflowCount}`,
             `Picker enabled: ${options.pick ? "yes" : "no"}`,
             `Optimizer mode: ${optimizerMode} (\u2264${maxTools})`,
             `Optimization applied: ${optimized ? "yes" : "no"}`,
+            `Workflow planning: ${workflowEnabled ? "yes" : "no"}`,
             ...(scrapedDocs ? [`Docs pages analyzed: ${scrapedDocs.length}`] : []),
             "",
             summarizeTools(finalIR),
@@ -257,6 +291,7 @@ export function registerInitCommand(program: Command): void {
       await generateTypeScriptMCPServer(finalIR, {
         outputDir: resolvedOutputDir,
         projectName: basename(resolvedOutputDir),
+        sourceIR: parsedIR,
       });
 
       const config: MCPForgeConfig = {
@@ -265,12 +300,14 @@ export function registerInitCommand(program: Command): void {
         apiName: toKebabCase(finalIR.apiName),
         outputDir,
         optimized,
+        workflowEnabled,
         optimizerMode,
         maxTools,
         selectedTools,
         ir: finalIR,
         sourceIR: parsedIR,
         ...(optimizedIR ? { optimizedIR } : {}),
+        ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
         ...(scrapedDocs ? { scrapedDocs } : {}),
       };
 

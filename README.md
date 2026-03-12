@@ -1,6 +1,6 @@
 # MCPForge
 
-Generate production-ready MCP servers from any OpenAPI spec or API docs page in seconds.
+Generate MCP servers from OpenAPI specs or docs pages, then turn raw API endpoints into a smaller set of tools that are actually useful for agents.
 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -9,104 +9,143 @@ Generate production-ready MCP servers from any OpenAPI spec or API docs page in 
 
 ![MCPForge Demo](./assets/demo.gif)
 
+## Why It Exists
+
+Most OpenAPI-to-MCP generators stop at endpoint wrappers. That gets you a server, but not necessarily a toolset an LLM can use well. You often end up with hundreds of low-signal tools, weak descriptions, and no clear path from "API surface area" to "jobs a user wants done."
+
+MCPForge does two extra things:
+
+- Curates endpoint tools with AI so the public surface stays small and usable.
+- Plans task-oriented workflow tools that wrap useful jobs like `find_customers`, `create_payment_link`, or `refund_payment`.
+
+The result is closer to "brief the model on the jobs it can do" than "dump the entire REST spec into MCP."
+
 ## Quick Start
 
 From an OpenAPI spec:
 
 ```bash
-npx mcpforge init https://api.example.com/openapi.json
+npx mcpforge init --optimize --workflows https://api.example.com/openapi.json
 ```
 
-From any API docs page (no spec needed):
+From a docs page when you do not have a spec:
 
 ```bash
-npx mcpforge init --from-url https://docs.stripe.com/api
+npx mcpforge init --from-url --workflows https://docs.stripe.com/api
 ```
 
-## Why MCPForge?
+Preview without writing files:
 
-Tools like FastMCP and Stainless can auto-generate MCP servers from OpenAPI specs, but the output is often rough: hundreds of tools with bad descriptions that overwhelm LLMs. MCPForge uses AI to curate endpoints into a smaller set of well-named, well-described tools that work well with Claude, Cursor, and other MCP clients. Think of it as the difference between dumping a raw API spec on an assistant and briefing them on the 20 tools they actually need.
+```bash
+npx mcpforge init --dry-run --optimize --workflows https://api.example.com/openapi.json
+```
 
-## What It Does
+## What MCPForge Does
 
-- Parses any OpenAPI 3.x spec into a clean MCP server
-- No OpenAPI spec? Point MCPForge at a docs URL and it infers endpoints with AI
-- Uses Claude to curate and optimize tools for LLM usage
-- Detects spec drift and flags breaking changes with risk scoring
-- Validates generated servers end to end with build, registration, and smoke tests
-- Generates a complete, ready-to-use MCP server with auth, error handling, and docs
+- Parses OpenAPI 3.0, 3.1, and Swagger 2.0 specs from local files or URLs
+- Scrapes docs pages and infers an API shape with Claude when no spec exists
+- Curates raw endpoints into a smaller endpoint toolset with `--optimize`
+- Plans task-oriented workflow tools with `--workflows`
+- Generates a complete TypeScript MCP server with auth scaffolding and docs
+- Detects upstream spec drift and reports risk-scored breaking changes
+- Rebuilds and smoke-tests generated servers over stdio with `mcpforge test`
 
-## Features
+## Feature Overview
 
-- **Smart OpenAPI parsing** - Converts endpoints into MCP-friendly tools with schema-aware inputs.
-- **Docs URL inference** (`--from-url`) - Scrapes API docs pages and uses Claude to infer endpoints. No OpenAPI spec required.
-- **AI-powered tool optimization** (`--optimize`) - Curates APIs to <=25 essential tools by default. GitHub (1,079 -> 25), Stripe (587 -> 25), Spotify (97 -> 25).
-- **Strict and standard modes** - Strict mode (default) targets <=25 tools for focused LLM usage. Standard mode (`--standard`) allows up to 80 for broader coverage. Custom cap with `--max-tools <n>`.
-- **Breaking change detection** (`diff`) - Compares the current spec against your last generation and flags changes as high, medium, or low risk.
-- **Generated server testing** (`test`) - Rebuilds a generated project, validates registered tools over stdio, and smoke-tests each handler.
-- **Multiple auth schemes** - Detects API key, bearer, OAuth2, and basic auth. Handles optional vs required auth gracefully.
-- **Claude Desktop and Cursor ready** - Generated README includes copy-paste MCP config snippets.
-- **Inspect and dry-run modes** - Understand a spec before generation and preview tools without writing files.
+- **Workflow planning** - Generates first-class workflow tools with deterministic step execution. Workflow tools depend on real upstream operations, so drift can be tracked during `diff` and `update`.
+- **AI endpoint curation** (`--optimize`) - Uses Claude to cap noisy APIs to a smaller, better-described public surface. Strict mode defaults to <=25 tools. Standard mode allows broader coverage up to 80.
+- **Docs URL inference** (`--from-url`) - Scrapes API docs pages and infers endpoints when there is no public OpenAPI spec.
+- **Interactive selection** (`--pick`) - Lets you choose the exact public tools to expose after planning and optimization.
+- **Breaking change detection** (`diff`) - Compares stored source IR against the latest upstream spec and reports high, medium, and low-risk changes.
+- **Workflow-aware update flow** (`update`) - Rechecks upstream APIs, reports workflow impact, and regenerates in place.
+- **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and smoke-tests each public handler over stdio.
+- **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
 
-## Commands
+## Command Summary
 
-- `mcpforge init <spec>` - Parse a spec, optionally optimize tools, and generate an MCP server project. Use `--from-url` when you only have docs. Use `--optimize` for AI curation. Use `--pick` to interactively choose which endpoints become tools, with AI suggestions pre-checked when combined with `--optimize`. Use `--dry-run` to preview without writing files.
-- `mcpforge generate` - Regenerate from `mcpforge.config.json`. Saved tool selections are respected automatically. Use `--optimize` to re-run AI optimization and `--pick` to re-pick tools interactively.
-- `mcpforge inspect <spec>` - Print API summary, endpoint groups by tag, and quality warnings.
-- `mcpforge diff` - Compare the current spec against the last generation and flag breaking changes with risk scoring (high/medium/low).
-- `mcpforge update` - Check for upstream spec changes and regenerate your server. Shows a diff summary and asks for confirmation on breaking changes. Use `--pick` to re-pick tools against the latest spec.
-- `mcpforge test` - Rebuild a generated server, verify `listTools` matches `mcpforge.config.json`, and smoke-test every tool over stdio. Use `--dir <path>` to target a generated project explicitly, `--timeout <ms>` to control per-tool call timeouts, and `--live` to run real API calls using auth configured in the generated project's `.env`.
+- `mcpforge init <spec>` - Parse a spec or docs URL and generate a project. Use `--optimize` for endpoint curation, `--workflows` for task-oriented tools, `--pick` for interactive selection, and `--dry-run` to preview.
+- `mcpforge generate` - Regenerate from `mcpforge.config.json`. Workflow mode, optimization mode, and tool selections are preserved in config.
+- `mcpforge inspect <spec>` - Inspect API structure and warnings. Use `--workflows` to preview the planned public toolset.
+- `mcpforge diff` - Compare the last stored source IR against the latest upstream version. Workflow-enabled projects also get workflow impact reporting.
+- `mcpforge update` - Refresh from upstream changes and regenerate in place. Supports `--workflows`, `--raw-endpoints`, `--pick`, `--optimize`, and `--force`.
+- `mcpforge test` - Rebuilds a generated server, validates registered tools, and smoke-tests public handlers. Use `--live` only when real credentials are configured.
+
+## Workflow Mode
+
+`--workflows` adds a planning layer on top of the parsed API:
+
+- MCPForge starts from the parsed endpoint IR.
+- If `--optimize` is enabled, it first curates which endpoints matter most.
+- It then plans workflow tools around useful jobs and can keep a few curated endpoint fallbacks when needed.
+- Each workflow stores which upstream operations it depends on, so future `diff` and `update` runs can report impact when those operations change.
+
+Current workflow execution is intentionally deterministic:
+
+- Linear steps only
+- No arbitrary code generation
+- Input mapping from workflow inputs and prior step results
+- Output selection from saved step results
 
 ## AI Optimization
 
-Use `--optimize` with `init` or `generate` to run Claude-based tool curation.
+Use `--optimize` with `init` or `generate` to run Claude-based endpoint curation.
 
 ```bash
-mcpforge init --optimize https://api.example.com/openapi.json
+npx mcpforge init --optimize https://api.example.com/openapi.json
 ```
 
-The optimizer analyzes your API and:
+The optimizer:
 
-- Curates to <=25 essential tools by default (strict mode)
-- Rewrites descriptions to be concise and LLM-friendly
-- Removes noise (health checks, admin routes, deprecated endpoints)
-- Prioritizes the most useful tools
+- Curates to <=25 endpoint tools by default in strict mode
+- Rewrites descriptions to be shorter and more LLM-friendly
+- Removes admin, health, docs, and other low-value routes
+- Prioritizes the endpoints most likely to matter for common user tasks
 
-Use `--standard` for broader coverage (up to 80 tools) or `--max-tools <n>` for a custom limit.
+Use `--standard` for broader coverage or `--max-tools <n>` for a custom cap.
 
-Requires `ANTHROPIC_API_KEY`. When missing, optimization is skipped and generation continues normally.
+Requires `ANTHROPIC_API_KEY`. If it is missing, optimization is skipped and generation continues.
 
 ## Configuration
 
-Generated projects include `mcpforge.config.json`, which stores the spec source, output directory, optimization mode, saved `selectedTools`, and the IR used for generation. Use this file with `mcpforge generate` to regenerate quickly after edits, or with `mcpforge diff` to detect upstream changes.
+Generated projects include `mcpforge.config.json`. It stores:
+
+- Spec source and source type
+- Output directory
+- Optimization settings
+- Whether workflow planning is enabled
+- Saved public tool selections
+- Source IR, optimized IR, planned workflow IR, and final generated IR
+
+That file is what makes `generate`, `diff`, and `update` work without repeating the original setup step.
 
 ## Testing Generated Servers
 
-Run the generated server checks from inside a generated project:
+Run from inside a generated project:
 
 ```bash
 npx mcpforge test
 ```
 
-Or point at a generated project from elsewhere:
+Or point at a generated project explicitly:
 
 ```bash
 npx mcpforge test --dir ./mcp-server-my-api
 ```
 
-By default, `mcpforge test` is dry-run oriented:
+By default, `mcpforge test`:
 
-- Runs `npm install` and `npm run build` in the generated project
-- Starts the built server over stdio using the MCP SDK client
-- Confirms every tool from `mcpforge.config.json` is registered with the expected schema
-- Calls each tool with minimal inputs and treats structured handler errors as a pass
-- Marks `401` and `403` responses as auth-required skips instead of failures
+- runs `npm install` and `npm run build`
+- starts the generated server over stdio
+- verifies `listTools` matches `mcpforge.config.json`
+- calls each public tool with minimal inputs
+- treats structured handler errors as a pass in dry-run mode
+- treats `401` and `403` as auth-required skips
 
-Use `--live` when you want to exercise the real upstream API. In live mode, MCPForge sends best-effort sample inputs for required fields and expects non-auth `2xx` responses. Make sure the generated project's `.env` is configured first.
+Use `--live` only when the generated project's `.env` is configured and you want real upstream API calls.
 
-## Tested APIs
+## Tested Compatibility
 
-MCPForge has been tested against diverse real-world API specs across different formats and edge cases.
+MCPForge has been exercised against real-world specs across different formats and edge cases.
 
 | API | Format | Endpoints | Status |
 |-----|--------|-----------|--------|
@@ -120,11 +159,11 @@ MCPForge has been tested against diverse real-world API specs across different f
 | api.video | OpenAPI 3.0 (circular refs) | 47 | yes |
 | Amadeus | Swagger 2.0 | 1 | yes |
 
-Supports OpenAPI 3.0, 3.1, Swagger 2.0, JSON and YAML formats, circular `$ref` schemas, and specs with missing operation IDs. Full report in [examples/compatibility-report.md](./examples/compatibility-report.md).
+Supports OpenAPI 3.0, 3.1, Swagger 2.0, JSON and YAML, circular `$ref`s, and specs with missing operation IDs. The broader compatibility report is in [examples/compatibility-report.md](./examples/compatibility-report.md).
 
 ## Contributing
 
-Contributions are welcome. Open an issue for bugs or ideas, or submit a PR with a focused change.
+Contributions are welcome. Open an issue for bugs or ideas, or submit a focused PR.
 
 ## License
 

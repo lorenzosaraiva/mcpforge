@@ -5,6 +5,8 @@ import {
   diffIR,
   generateTypeScriptMCPServer,
   inferIRFromDocs,
+  isEndpointTool,
+  isWorkflowTool,
   optimizeIRWithAI,
   parseOpenAPISpec,
   scrapeDocsFromUrl,
@@ -24,10 +26,8 @@ import {
 } from "../utils/config.js";
 import { promptConfirm } from "../utils/prompts.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  applyOptimizedToolSuggestions,
-  deriveSuggestedSelectionValues,
-  filterIRBySelectedTools,
   resolveSelectedToolsForIR,
 } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
@@ -187,6 +187,55 @@ function printFormattedDiff(result: DiffResult): void {
   }
 }
 
+function resolveChangedOperationIds(
+  oldIR: MCPForgeIR,
+  newIR: MCPForgeIR,
+  result: DiffResult,
+): Set<string> {
+  const changed = new Set<string>();
+  const candidates = [...oldIR.tools, ...newIR.tools].filter((tool) => isEndpointTool(tool));
+
+  for (const change of result.changes) {
+    for (const tool of candidates) {
+      const matchesMethodPath =
+        tool.method.toUpperCase() === change.method.toUpperCase() && tool.path === change.path;
+      const matchesName = tool.name === change.toolName;
+      if (!matchesMethodPath && !matchesName) {
+        continue;
+      }
+
+      const operationId = tool.originalOperationId ?? tool.name;
+      changed.add(operationId);
+    }
+  }
+
+  return changed;
+}
+
+function printWorkflowImpacts(
+  currentIR: MCPForgeIR,
+  oldSourceIR: MCPForgeIR,
+  newSourceIR: MCPForgeIR,
+  diffResult: DiffResult,
+): void {
+  const changedOperationIds = resolveChangedOperationIds(oldSourceIR, newSourceIR, diffResult);
+  const impactedWorkflows = currentIR.tools.filter(
+    (tool) =>
+      isWorkflowTool(tool) &&
+      tool.dependsOnOperationIds.some((operationId) => changedOperationIds.has(operationId)),
+  );
+
+  if (impactedWorkflows.length === 0) {
+    return;
+  }
+
+  const lines = impactedWorkflows.map(
+    (tool) =>
+      `- ${tool.name}: depends on ${tool.dependsOnOperationIds.filter((operationId) => changedOperationIds.has(operationId)).join(", ")}`,
+  );
+  note(lines.join("\n"), `Workflow Impact (${impactedWorkflows.length})`);
+}
+
 async function parseLatestIRFromSource(
   config: LoadedMCPForgeConfig,
   logger: (message: string) => void,
@@ -227,18 +276,6 @@ function shouldReoptimize(options: { optimize?: boolean }, config: LoadedMCPForg
   return options.optimize ?? config.optimized;
 }
 
-function buildFinalIR(
-  sourceIR: MCPForgeIR,
-  optimizedIR: MCPForgeIR | undefined,
-  optimized: boolean,
-  selectedTools: readonly string[],
-): MCPForgeIR {
-  return filterIRBySelectedTools(
-    applyOptimizedToolSuggestions(sourceIR, optimized ? optimizedIR : undefined),
-    selectedTools,
-  );
-}
-
 export function registerUpdateCommand(program: Command): void {
   program
     .command("update")
@@ -247,6 +284,8 @@ export function registerUpdateCommand(program: Command): void {
     .option("--optimize", "Re-run optimization during regeneration")
     .option("--no-optimize", "Skip optimization even if this project was previously optimized")
     .option("--pick", "Interactively re-pick which endpoints become tools")
+    .option("--workflows", "Generate task-oriented workflow tools")
+    .option("--raw-endpoints", "Disable workflow planning and generate raw endpoint tools")
     .option("--dry-run", "Show what would change without regenerating files")
     .action(
       async (
@@ -255,10 +294,15 @@ export function registerUpdateCommand(program: Command): void {
           optimize?: boolean;
           dryRun?: boolean;
           pick?: boolean;
+          workflows?: boolean;
+          rawEndpoints?: boolean;
         },
       ) => {
         if (process.argv.includes("--optimize") && process.argv.includes("--no-optimize")) {
           throw new Error("Use either --optimize or --no-optimize, not both.");
+        }
+        if (options.workflows && options.rawEndpoints) {
+          throw new Error("Use either --workflows or --raw-endpoints, not both.");
         }
 
         intro("mcpforge update");
@@ -275,6 +319,7 @@ export function registerUpdateCommand(program: Command): void {
         configSpinner.start("Loading mcpforge config...");
         const config = await loadConfig(configPath);
         configSpinner.stop("Config loaded.");
+        const workflowEnabled = options.workflows ?? (options.rawEndpoints ? false : config.workflowEnabled);
 
         const outputDir = resolveOutputDirectory(config.outputDir, configDir);
         assertOutputDirectoryUsable(outputDir);
@@ -290,9 +335,25 @@ export function registerUpdateCommand(program: Command): void {
           config.sourceType === "docs-url" ? "Docs re-analysis completed." : "Spec parsed.",
         );
 
-        const currentSelection = resolveSelectedToolsForIR(config.sourceIR, config.selectedTools);
-        const previousSelectedIR = filterIRBySelectedTools(config.sourceIR, currentSelection);
-        const latestSelectedIR = filterIRBySelectedTools(latest.ir, currentSelection);
+        const currentSelection = workflowEnabled
+          ? config.selectedTools
+          : resolveSelectedToolsForIR(config.sourceIR, config.selectedTools);
+        const previousSelectedIR = workflowEnabled
+          ? config.sourceIR
+          : {
+              ...config.sourceIR,
+              tools: config.sourceIR.tools.filter((tool) =>
+                currentSelection.includes(tool.originalOperationId ?? tool.name),
+              ),
+            };
+        const latestSelectedIR = workflowEnabled
+          ? latest.ir
+          : {
+              ...latest.ir,
+              tools: latest.ir.tools.filter((tool) =>
+                currentSelection.includes(tool.originalOperationId ?? tool.name),
+              ),
+            };
 
         const diffSpinner = spinner();
         diffSpinner.start("Comparing previous and current IR...");
@@ -307,8 +368,16 @@ export function registerUpdateCommand(program: Command): void {
         const pickerEnabled = Boolean(options.pick) && !isNonInteractiveRuntime();
         if (hasChanges) {
           printFormattedDiff(result);
+          if (workflowEnabled) {
+            printWorkflowImpacts(config.ir, config.sourceIR, latest.ir, result);
+          }
         } else {
-          note("No upstream changes were detected for the currently selected tools.", "Up To Date");
+          note(
+            workflowEnabled
+              ? "No upstream changes were detected for the current workflow plan."
+              : "No upstream changes were detected for the currently selected tools.",
+            "Up To Date",
+          );
         }
 
         if (options.pick && !pickerEnabled) {
@@ -381,29 +450,49 @@ export function registerUpdateCommand(program: Command): void {
           }
         }
 
-        let selectedTools = resolveSelectedToolsForIR(latest.ir, config.selectedTools);
+        const candidateIR = buildCandidateIR({
+          sourceIR: latest.ir,
+          optimizedIR: optimized ? optimizedIR : undefined,
+          workflowEnabled,
+          maxTools: config.maxTools,
+        });
+        let selectedTools = resolveSelectedToolsForIR(candidateIR, config.selectedTools);
 
         if (pickerEnabled) {
-          const defaultSelectedTools = optimizedIR
-            ? deriveSuggestedSelectionValues(latest.ir, optimizedIR)
-            : selectedTools;
-          const pickResult = await pickToolsFromIR(latest.ir, {
+          const defaultSelectedTools = workflowEnabled
+            ? selectedTools
+            : getDefaultSelectedTools({
+                sourceIR: latest.ir,
+                optimizedIR: optimized ? optimizedIR : undefined,
+                workflowEnabled,
+                maxTools: config.maxTools,
+              });
+          const pickResult = await pickToolsFromIR(candidateIR, {
             defaultSelectedTools,
-            message: "Select endpoints to regenerate as tools",
+            message: workflowEnabled
+              ? "Select workflow and fallback tools to regenerate"
+              : "Select endpoints to regenerate as tools",
           });
           selectedTools = pickResult.selectedTools;
           log.info(
-            `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+            `Selected ${selectedTools.length} tool(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
           );
         }
 
-        const finalIR = buildFinalIR(latest.ir, optimizedIR, optimized, selectedTools);
+        const finalIR = buildFinalIR({
+          sourceIR: latest.ir,
+          optimizedIR: optimized ? optimizedIR : undefined,
+          workflowEnabled,
+          maxTools: config.maxTools,
+          selectedTools,
+        });
 
         const generateSpinner = spinner();
         generateSpinner.start(`Regenerating server in ${outputDir}...`);
         await generateTypeScriptMCPServer(finalIR, {
           outputDir,
           projectName: basename(outputDir),
+          sourceIR: latest.ir,
         });
         generateSpinner.stop("Regeneration complete.");
 
@@ -413,12 +502,14 @@ export function registerUpdateCommand(program: Command): void {
           apiName: config.apiName,
           outputDir: config.outputDir,
           optimized,
+          workflowEnabled,
           optimizerMode: config.optimizerMode,
           maxTools: config.maxTools,
           selectedTools,
           ir: finalIR,
           sourceIR: latest.ir,
           ...(optimized && optimizedIR ? { optimizedIR } : {}),
+          ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
           ...(config.sourceType === "docs-url" ? { scrapedDocs: latest.scrapedDocs } : {}),
         };
         await writeConfigFile(configPath, updatedConfig);
@@ -428,6 +519,7 @@ export function registerUpdateCommand(program: Command): void {
             `Diff summary: ${result.summary.high} high, ${result.summary.medium} medium, ${result.summary.low} low risk changes.`,
             `Selected tools: ${finalIR.tools.length}.`,
             `Optimization: ${optimized ? "applied" : "not applied"}.`,
+            `Workflow planning: ${workflowEnabled ? "applied" : "not applied"}.`,
           ].join("\n"),
           "Update Summary",
         );

@@ -1,0 +1,241 @@
+export interface ToolHandlerContext {
+  baseUrl: string;
+  authHeaders: Record<string, string>;
+}
+
+export interface EndpointRuntimeDefinition {
+  name: string;
+  operationId?: string;
+  method: string;
+  path: string;
+  pathParams: Array<{ name: string; token: string }>;
+  hasPathParams: boolean;
+  queryParams: Array<{ name: string; required: boolean }>;
+  hasQueryParams: boolean;
+  headerParams: Array<{ name: string; required: boolean }>;
+  hasHeaderParams: boolean;
+  hasRequestBody: boolean;
+  requestBodyRequired: boolean;
+  requestBodyContentType: string;
+}
+
+function buildUrl(baseUrl: string, path: string): URL {
+  const base = new URL(baseUrl);
+  const basePath = base.pathname.endsWith("/") ? base.pathname.slice(0, -1) : base.pathname;
+  const requestPath = path.startsWith("/") ? path.slice(1) : path;
+  const joinedPath = `${basePath}/${requestPath}`.replace(/\/{2,}/g, "/");
+  base.pathname = joinedPath.startsWith("/") ? joinedPath : `/${joinedPath}`;
+  return base;
+}
+
+function getPathValue(source: unknown, path: string): unknown {
+  if (!path.trim()) {
+    return source;
+  }
+
+  const segments = path
+    .split(".")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  let current: unknown = source;
+  for (const segment of segments) {
+    if (current === null || current === undefined) {
+      return undefined;
+    }
+
+    if (Array.isArray(current)) {
+      const index = Number(segment);
+      if (!Number.isInteger(index)) {
+        return undefined;
+      }
+      current = current[index];
+      continue;
+    }
+
+    if (typeof current !== "object") {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+}
+
+function resolveReference(
+  reference: { $fromInput?: string; $fromStep?: string },
+  input: Record<string, unknown>,
+  stepResults: Record<string, unknown>,
+): unknown {
+  if (typeof reference.$fromInput === "string") {
+    return getPathValue(input, reference.$fromInput);
+  }
+
+  if (typeof reference.$fromStep === "string") {
+    const [stepKey, ...rest] = reference.$fromStep.split(".");
+    const base = stepResults[stepKey];
+    return rest.length === 0 ? base : getPathValue(base, rest.join("."));
+  }
+
+  return undefined;
+}
+
+function isReferenceObject(value: unknown): value is { $fromInput?: string; $fromStep?: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  if (keys.length !== 1) {
+    return false;
+  }
+
+  return keys[0] === "$fromInput" || keys[0] === "$fromStep";
+}
+
+export function resolveWorkflowValue(
+  value: unknown,
+  input: Record<string, unknown>,
+  stepResults: Record<string, unknown>,
+): unknown {
+  if (isReferenceObject(value)) {
+    return resolveReference(value, input, stepResults);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveWorkflowValue(entry, input, stepResults));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    result[key] = resolveWorkflowValue(child, input, stepResults);
+  }
+  return result;
+}
+
+export function selectWorkflowOutput(
+  selector: unknown,
+  lastResult: unknown,
+  stepResults: Record<string, unknown>,
+  input: Record<string, unknown>,
+): unknown {
+  if (selector === undefined) {
+    return lastResult;
+  }
+
+  return resolveWorkflowValue(selector, input, stepResults);
+}
+
+export async function invokeEndpoint(
+  endpoint: EndpointRuntimeDefinition,
+  input: Record<string, unknown>,
+  context: ToolHandlerContext,
+): Promise<unknown> {
+  let resolvedPath = endpoint.path;
+
+  for (const param of endpoint.pathParams) {
+    const value = input[param.name];
+    if (value === undefined || value === null) {
+      throw new Error(`Missing required path parameter: ${param.name}`);
+    }
+    resolvedPath = resolvedPath.split(param.token).join(encodeURIComponent(String(value)));
+  }
+
+  const url = buildUrl(context.baseUrl, resolvedPath);
+
+  for (const param of endpoint.queryParams) {
+    const value = input[param.name];
+    if (value === undefined || value === null) {
+      if (param.required) {
+        throw new Error(`Missing required query parameter: ${param.name}`);
+      }
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        url.searchParams.append(param.name, String(item));
+      }
+    } else {
+      url.searchParams.append(param.name, String(value));
+    }
+  }
+
+  const headers: Record<string, string> = { ...context.authHeaders };
+
+  for (const param of endpoint.headerParams) {
+    const value = input[param.name];
+    if (value === undefined || value === null) {
+      if (param.required) {
+        throw new Error(`Missing required header parameter: ${param.name}`);
+      }
+      continue;
+    }
+
+    headers[param.name] = String(value);
+  }
+
+  const bodyInput = input.body;
+  if (endpoint.requestBodyRequired && (bodyInput === undefined || bodyInput === null)) {
+    throw new Error("Missing required request body: body");
+  }
+
+  let requestBody: BodyInit | undefined;
+  if (bodyInput !== undefined && bodyInput !== null) {
+    headers["Content-Type"] = endpoint.requestBodyContentType;
+    if (endpoint.requestBodyContentType.toLowerCase().includes("json")) {
+      requestBody = JSON.stringify(bodyInput);
+    } else if (
+      typeof bodyInput === "string" ||
+      bodyInput instanceof ArrayBuffer ||
+      ArrayBuffer.isView(bodyInput) ||
+      bodyInput instanceof Blob
+    ) {
+      requestBody = bodyInput as BodyInit;
+    } else {
+      requestBody = JSON.stringify(bodyInput);
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: endpoint.method,
+      headers,
+      body: requestBody,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown network failure";
+    throw new Error(`Network request failed for ${endpoint.method} ${url.toString()}: ${message}`);
+  }
+
+  const responseContentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  let parsedBody: unknown = null;
+
+  try {
+    if (responseContentType.includes("application/json")) {
+      parsedBody = await response.json();
+    } else {
+      parsedBody = await response.text();
+    }
+  } catch {
+    parsedBody = await response.text();
+  }
+
+  if (!response.ok) {
+    const bodyText = typeof parsedBody === "string" ? parsedBody : JSON.stringify(parsedBody, null, 2);
+    throw new Error(
+      `API request failed for ${endpoint.method} ${url.toString()} (${response.status} ${response.statusText}): ${bodyText}`,
+    );
+  }
+
+  return {
+    status: response.status,
+    data: parsedBody,
+  };
+}

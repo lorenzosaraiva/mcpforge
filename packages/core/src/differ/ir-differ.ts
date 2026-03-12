@@ -1,10 +1,13 @@
 import type {
   AuthConfig,
+  EndpointToolDefinition,
   MCPForgeIR,
   RequestBodyDef,
   ToolDefinition,
   ToolParameter,
+  WorkflowToolDefinition,
 } from "../parser/types.js";
+import { isEndpointTool, isWorkflowTool } from "../parser/types.js";
 
 export interface DiffResult {
   summary: {
@@ -36,7 +39,7 @@ type MatchedToolPair = {
   newTool: ToolDefinition;
   oldIndex: number;
   newIndex: number;
-  matchedBy: "operationId" | "methodPath";
+  matchedBy: "operationId" | "methodPath" | "name";
 };
 
 const RISK_ORDER: Record<DiffChange["risk"], number> = {
@@ -92,11 +95,22 @@ function toParamKey(parameter: ToolParameter): string {
   return `${parameter.location}:${parameter.name}`;
 }
 
+function getToolPath(tool: ToolDefinition): string {
+  return isEndpointTool(tool) ? tool.path : "(workflow)";
+}
+
+function getToolMethod(tool: ToolDefinition): string {
+  return isEndpointTool(tool) ? tool.method : "WORKFLOW";
+}
+
 function toMethodPathKey(tool: ToolDefinition): string {
-  return `${tool.method.toUpperCase()} ${tool.path}`;
+  return `${getToolMethod(tool).toUpperCase()} ${getToolPath(tool)}`;
 }
 
 function isDeprecated(tool: ToolDefinition): boolean {
+  if (isWorkflowTool(tool)) {
+    return false;
+  }
   const text = `${tool.description} ${tool.responseDescription ?? ""}`.toLowerCase();
   return text.includes("deprecated");
 }
@@ -173,9 +187,7 @@ function requestBodyHasIncompatibleSchemaChange(
     return false;
   }
 
-  const oldSchemaJson = stableStringify(oldSchema);
-  const newSchemaJson = stableStringify(newSchema);
-  return oldSchemaJson !== newSchemaJson;
+  return stableStringify(oldSchema) !== stableStringify(newSchema);
 }
 
 function addChange(changes: DiffChange[], change: DiffChange): void {
@@ -252,7 +264,10 @@ function compareAuth(oldAuth: AuthConfig, newAuth: AuthConfig): DiffChange[] {
   return changes;
 }
 
-function compareParameters(oldTool: ToolDefinition, newTool: ToolDefinition): DiffChange[] {
+function compareParameters(
+  oldTool: EndpointToolDefinition,
+  newTool: EndpointToolDefinition,
+): DiffChange[] {
   const changes: DiffChange[] = [];
 
   const oldByKey = new Map(oldTool.parameters.map((parameter) => [toParamKey(parameter), parameter]));
@@ -324,7 +339,7 @@ function compareParameters(oldTool: ToolDefinition, newTool: ToolDefinition): Di
     }
 
     addChange(changes, {
-      risk: oldParameter.required ? "medium" : "medium",
+      risk: "medium",
       type: "modified",
       toolName: newTool.name,
       method: newTool.method,
@@ -359,8 +374,8 @@ function compareParameters(oldTool: ToolDefinition, newTool: ToolDefinition): Di
 }
 
 function compareRequestBody(
-  oldTool: ToolDefinition,
-  newTool: ToolDefinition,
+  oldTool: EndpointToolDefinition,
+  newTool: EndpointToolDefinition,
 ): DiffChange[] {
   const changes: DiffChange[] = [];
 
@@ -382,9 +397,7 @@ function compareRequestBody(
     addChange(changes, {
       ...toolMeta,
       risk: newBody.required ? "high" : "low",
-      details: newBody.required
-        ? "Required request body was added."
-        : "Optional request body was added.",
+      details: newBody.required ? "Required request body was added." : "Optional request body was added.",
       after: stableStringify(newBody.schema),
     });
     return changes;
@@ -393,10 +406,8 @@ function compareRequestBody(
   if (oldBody && !newBody) {
     addChange(changes, {
       ...toolMeta,
-      risk: oldBody.required ? "medium" : "medium",
-      details: oldBody.required
-        ? "Required request body was removed."
-        : "Optional request body was removed.",
+      risk: "medium",
+      details: oldBody.required ? "Required request body was removed." : "Optional request body was removed.",
       before: stableStringify(oldBody.schema),
     });
     return changes;
@@ -419,20 +430,19 @@ function compareRequestBody(
     addChange(changes, {
       ...toolMeta,
       risk: resolvedNewBody.required ? "high" : "medium",
-      details: resolvedNewBody.required
-        ? "Request body became required."
-        : "Request body became optional.",
+      details: resolvedNewBody.required ? "Request body became required." : "Request body became optional.",
       before: String(resolvedOldBody.required),
       after: String(resolvedNewBody.required),
     });
   }
 
-  const oldSchema = resolvedOldBody.schema;
-  const newSchema = resolvedNewBody.schema;
-  const oldSchemaJson = stableStringify(oldSchema);
-  const newSchemaJson = stableStringify(newSchema);
+  const oldSchemaJson = stableStringify(resolvedOldBody.schema);
+  const newSchemaJson = stableStringify(resolvedNewBody.schema);
   if (oldSchemaJson !== newSchemaJson) {
-    const incompatible = requestBodyHasIncompatibleSchemaChange(oldSchema, newSchema);
+    const incompatible = requestBodyHasIncompatibleSchemaChange(
+      resolvedOldBody.schema,
+      resolvedNewBody.schema,
+    );
     addChange(changes, {
       ...toolMeta,
       risk: incompatible ? "high" : "low",
@@ -447,9 +457,94 @@ function compareRequestBody(
   return changes;
 }
 
+function compareWorkflowPair(
+  oldTool: WorkflowToolDefinition,
+  newTool: WorkflowToolDefinition,
+): DiffChange[] {
+  const changes: DiffChange[] = [];
+  const toolMeta = {
+    toolName: newTool.name,
+    method: "WORKFLOW",
+    path: "(workflow)",
+    type: "modified" as const,
+  };
+
+  if (normalizeText(oldTool.description) !== normalizeText(newTool.description)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: jaccardSimilarity(oldTool.description, newTool.description) < 0.55 ? "medium" : "low",
+      details: "Workflow description changed.",
+      before: oldTool.description,
+      after: newTool.description,
+    });
+  }
+
+  const oldDeps = [...oldTool.dependsOnOperationIds].sort((a, b) => a.localeCompare(b));
+  const newDeps = [...newTool.dependsOnOperationIds].sort((a, b) => a.localeCompare(b));
+  if (stableStringify(oldDeps) !== stableStringify(newDeps)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "high",
+      details: "Workflow dependencies changed.",
+      before: oldDeps.join(", "),
+      after: newDeps.join(", "),
+    });
+  }
+
+  if (stableStringify(oldTool.inputSchema) !== stableStringify(newTool.inputSchema)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "high",
+      details: "Workflow input schema changed.",
+      before: stableStringify(oldTool.inputSchema),
+      after: stableStringify(newTool.inputSchema),
+    });
+  }
+
+  if (stableStringify(oldTool.steps) !== stableStringify(newTool.steps)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "high",
+      details: "Workflow execution steps changed.",
+      before: stableStringify(oldTool.steps),
+      after: stableStringify(newTool.steps),
+    });
+  }
+
+  if (stableStringify(oldTool.output) !== stableStringify(newTool.output)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "low",
+      details: "Workflow output mapping changed.",
+      before: stableStringify(oldTool.output),
+      after: stableStringify(newTool.output),
+    });
+  }
+
+  return changes;
+}
+
 function compareToolPair(pair: MatchedToolPair): DiffChange[] {
   const changes: DiffChange[] = [];
   const { oldTool, newTool, matchedBy } = pair;
+
+  if (isWorkflowTool(oldTool) || isWorkflowTool(newTool)) {
+    if (isWorkflowTool(oldTool) && isWorkflowTool(newTool)) {
+      return compareWorkflowPair(oldTool, newTool);
+    }
+
+    addChange(changes, {
+      risk: "high",
+      type: "modified",
+      toolName: newTool.name,
+      path: getToolPath(newTool),
+      method: getToolMethod(newTool),
+      details: "Tool kind changed between endpoint and workflow.",
+      before: oldTool.kind,
+      after: newTool.kind,
+    });
+    return changes;
+  }
 
   if (matchedBy === "operationId" && oldTool.path !== newTool.path) {
     addChange(changes, {
@@ -477,9 +572,7 @@ function compareToolPair(pair: MatchedToolPair): DiffChange[] {
     });
   }
 
-  const oldDescription = normalizeText(oldTool.description);
-  const newDescription = normalizeText(newTool.description);
-  if (oldDescription !== newDescription) {
+  if (normalizeText(oldTool.description) !== normalizeText(newTool.description)) {
     const similarity = jaccardSimilarity(oldTool.description, newTool.description);
     addChange(changes, {
       risk: similarity < 0.55 ? "medium" : "low",
@@ -487,18 +580,13 @@ function compareToolPair(pair: MatchedToolPair): DiffChange[] {
       toolName: newTool.name,
       path: newTool.path,
       method: newTool.method,
-      details:
-        similarity < 0.55
-          ? "Description changed significantly."
-          : "Description wording changed.",
+      details: similarity < 0.55 ? "Description changed significantly." : "Description wording changed.",
       before: oldTool.description,
       after: newTool.description,
     });
   }
 
-  const oldResponseDescription = normalizeText(oldTool.responseDescription);
-  const newResponseDescription = normalizeText(newTool.responseDescription);
-  if (oldResponseDescription !== newResponseDescription) {
+  if (normalizeText(oldTool.responseDescription) !== normalizeText(newTool.responseDescription)) {
     const responseSimilarity = jaccardSimilarity(
       oldTool.responseDescription,
       newTool.responseDescription,
@@ -548,7 +636,6 @@ function compareToolPair(pair: MatchedToolPair): DiffChange[] {
 
   changes.push(...compareParameters(oldTool, newTool));
   changes.push(...compareRequestBody(oldTool, newTool));
-
   return changes;
 }
 
@@ -563,6 +650,7 @@ function matchTools(oldTools: ToolDefinition[], newTools: ToolDefinition[]): {
 
   const newByOperationId = new Map<string, number[]>();
   const newByMethodPath = new Map<string, number[]>();
+  const newByName = new Map<string, number[]>();
 
   newTools.forEach((tool, index) => {
     if (tool.originalOperationId) {
@@ -574,6 +662,10 @@ function matchTools(oldTools: ToolDefinition[], newTools: ToolDefinition[]): {
     const keyList = newByMethodPath.get(methodPath) ?? [];
     keyList.push(index);
     newByMethodPath.set(methodPath, keyList);
+
+    const nameList = newByName.get(tool.name) ?? [];
+    nameList.push(index);
+    newByName.set(tool.name, nameList);
   });
 
   const takeUnusedIndex = (indexes: number[] | undefined, used: Set<number>): number | undefined => {
@@ -594,9 +686,16 @@ function matchTools(oldTools: ToolDefinition[], newTools: ToolDefinition[]): {
     }
 
     let matchedNewIndex: number | undefined;
-    let matchedBy: "operationId" | "methodPath" | undefined;
+    let matchedBy: MatchedToolPair["matchedBy"] | undefined;
 
-    if (oldTool.originalOperationId) {
+    if (isWorkflowTool(oldTool)) {
+      matchedNewIndex = takeUnusedIndex(newByName.get(oldTool.name), usedNewIndexes);
+      if (matchedNewIndex !== undefined) {
+        matchedBy = "name";
+      }
+    }
+
+    if (matchedNewIndex === undefined && oldTool.originalOperationId) {
       matchedNewIndex = takeUnusedIndex(
         newByOperationId.get(oldTool.originalOperationId),
         usedNewIndexes,
@@ -607,10 +706,7 @@ function matchTools(oldTools: ToolDefinition[], newTools: ToolDefinition[]): {
     }
 
     if (matchedNewIndex === undefined) {
-      matchedNewIndex = takeUnusedIndex(
-        newByMethodPath.get(toMethodPathKey(oldTool)),
-        usedNewIndexes,
-      );
+      matchedNewIndex = takeUnusedIndex(newByMethodPath.get(toMethodPathKey(oldTool)), usedNewIndexes);
       if (matchedNewIndex !== undefined) {
         matchedBy = "methodPath";
       }
@@ -677,10 +773,10 @@ export function diffIR(oldIR: MCPForgeIR, newIR: MCPForgeIR): DiffResult {
       risk: "high",
       type: "removed",
       toolName: tool.name,
-      path: tool.path,
-      method: tool.method,
-      details: "Endpoint was removed entirely.",
-      before: `${tool.method} ${tool.path}`,
+      path: getToolPath(tool),
+      method: getToolMethod(tool),
+      details: isEndpointTool(tool) ? "Endpoint was removed entirely." : "Workflow was removed entirely.",
+      before: isEndpointTool(tool) ? `${tool.method} ${tool.path}` : tool.name,
     });
   }
 
@@ -693,17 +789,21 @@ export function diffIR(oldIR: MCPForgeIR, newIR: MCPForgeIR): DiffResult {
       risk: "low",
       type: "added",
       toolName: tool.name,
-      path: tool.path,
-      method: tool.method,
-      details: "New endpoint was added.",
-      after: `${tool.method} ${tool.path}`,
+      path: getToolPath(tool),
+      method: getToolMethod(tool),
+      details: isEndpointTool(tool) ? "New endpoint was added." : "New workflow was added.",
+      after: isEndpointTool(tool) ? `${tool.method} ${tool.path}` : tool.name,
     });
   }
 
   for (const pair of matchedPairs) {
     const pairChanges = compareToolPair(pair);
     if (pairChanges.length > 0) {
-      const key = pair.oldTool.originalOperationId ?? `${pair.oldTool.method} ${pair.oldTool.path}`;
+      const key =
+        pair.oldTool.originalOperationId ??
+        (isEndpointTool(pair.oldTool)
+          ? `${pair.oldTool.method} ${pair.oldTool.path}`
+          : pair.oldTool.name);
       modifiedTools.add(key);
       changes.push(...pairChanges);
     }

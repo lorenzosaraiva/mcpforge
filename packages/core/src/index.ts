@@ -10,6 +10,8 @@ export { generateTypeScriptMCPServer } from "./generator/typescript-generator.js
 export * from "./differ/ir-differ.js";
 export { diffIR } from "./differ/ir-differ.js";
 
+export { planWorkflowTools } from "./planner/workflow-planner.js";
+
 export * from "./scraper/docs-scraper.js";
 export { scrapeDocsFromUrl } from "./scraper/docs-scraper.js";
 

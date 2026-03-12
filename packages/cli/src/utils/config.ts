@@ -14,11 +14,13 @@ const ConfigSchema = z
     apiName: z.string().optional(),
     outputDir: z.string().optional(),
     optimized: z.boolean().optional(),
+    workflowEnabled: z.boolean().optional(),
     optimizerMode: z.enum(["strict", "standard"]).optional(),
     maxTools: z.number().int().positive().optional(),
     selectedTools: z.array(z.string()).optional(),
     sourceIR: z.unknown().optional(),
     optimizedIR: z.unknown().optional(),
+    workflowIR: z.unknown().optional(),
     scrapedDocs: z
       .array(
         z.object({
@@ -37,18 +39,21 @@ export interface MCPForgeConfig {
   apiName: string;
   outputDir: string;
   optimized: boolean;
+  workflowEnabled: boolean;
   optimizerMode: "strict" | "standard";
   maxTools: number;
   selectedTools: string[];
   ir: MCPForgeIR;
   sourceIR: MCPForgeIR;
   optimizedIR?: MCPForgeIR;
+  workflowIR?: MCPForgeIR;
   scrapedDocs?: ScrapedDocPage[];
 }
 
 export interface LoadedMCPForgeConfig extends MCPForgeConfig {
   hasSourceIR: boolean;
   hasOptimizedIR: boolean;
+  hasWorkflowIR: boolean;
 }
 
 function toKebabCase(value: string): string {
@@ -126,9 +131,13 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
   const outputDir = parsedConfig.outputDir ?? ".";
   const hasSourceIR = parsedConfig.sourceIR !== undefined;
   const hasOptimizedIR = parsedConfig.optimizedIR !== undefined;
+  const hasWorkflowIR = parsedConfig.workflowIR !== undefined;
   const sourceIR = (parsedConfig.sourceIR as MCPForgeIR | undefined) ?? ir;
   const optimizedIR =
     (parsedConfig.optimizedIR as MCPForgeIR | undefined) ?? (parsedConfig.optimized ? ir : undefined);
+  const workflowIR =
+    (parsedConfig.workflowIR as MCPForgeIR | undefined) ??
+    (parsedConfig.workflowEnabled ? ir : undefined);
   const selectedTools = parsedConfig.selectedTools ?? getAllToolSelectionValues(ir);
 
   return {
@@ -137,15 +146,18 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     apiName: resolveApiName(parsedConfig.apiName, ir),
     outputDir,
     optimized: parsedConfig.optimized ?? false,
+    workflowEnabled: parsedConfig.workflowEnabled ?? false,
     optimizerMode: parsedConfig.optimizerMode ?? "strict",
     maxTools: parsedConfig.maxTools ?? 25,
     selectedTools,
     ir,
     sourceIR,
     optimizedIR,
+    workflowIR,
     scrapedDocs: parsedConfig.scrapedDocs as ScrapedDocPage[] | undefined,
     hasSourceIR,
     hasOptimizedIR,
+    hasWorkflowIR,
   };
 }
 

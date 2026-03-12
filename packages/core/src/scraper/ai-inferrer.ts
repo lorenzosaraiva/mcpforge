@@ -1,7 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
-import type { AuthConfig, MCPForgeIR, ToolDefinition, ToolParameter } from "../parser/types.js";
+import type {
+  AuthConfig,
+  EndpointToolDefinition,
+  MCPForgeIR,
+  ToolParameter,
+} from "../parser/types.js";
 import { toSnakeCase, truncateText } from "../utils/schema-utils.js";
 import type { ScrapedDocPage } from "./docs-scraper.js";
 
@@ -215,7 +220,7 @@ function mergeInferredStructures(chunks: InferredStructure[]): InferredStructure
   };
 }
 
-function toToolDefinition(endpoint: InferredEndpoint): ToolDefinition {
+function toToolDefinition(endpoint: InferredEndpoint): EndpointToolDefinition {
   const method = endpoint.method.toUpperCase();
   const path = normalizePath(endpoint.path);
   const operationId = endpoint.operationId?.trim()
@@ -238,6 +243,7 @@ function toToolDefinition(endpoint: InferredEndpoint): ToolDefinition {
   }));
 
   return {
+    kind: "endpoint",
     name: operationId,
     description: resolvedDescription,
     method,

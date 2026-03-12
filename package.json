@@ -23,10 +23,12 @@
   ],
   "scripts": {
     "build": "npm run build -w @mcpforge/core && npm run build -w mcpforge",
-    "dev": "tsx packages/cli/src/index.ts"
+    "dev": "tsx packages/cli/src/index.ts",
+    "test": "vitest run"
   },
   "devDependencies": {
     "tsx": "^4.20.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

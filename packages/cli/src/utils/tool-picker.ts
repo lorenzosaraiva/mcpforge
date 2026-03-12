@@ -1,6 +1,7 @@
 import { cancel, isCancel, multiselect, note, select } from "@clack/prompts";
 
 import type { MCPForgeIR, ToolDefinition } from "../core.js";
+import { isEndpointTool } from "../core.js";
 import { getToolSelectionValue } from "./tool-selection.js";
 
 type PickerMode = "individual" | "tag";
@@ -47,12 +48,16 @@ function sortTools(tools: ToolDefinition[]): ToolDefinition[] {
       return tagDelta;
     }
 
-    const pathDelta = left.path.localeCompare(right.path);
+    const leftKey = isEndpointTool(left) ? left.path : left.name;
+    const rightKey = isEndpointTool(right) ? right.path : right.name;
+    const pathDelta = leftKey.localeCompare(rightKey);
     if (pathDelta !== 0) {
       return pathDelta;
     }
 
-    return left.method.localeCompare(right.method);
+    const leftMethod = isEndpointTool(left) ? left.method : "WORKFLOW";
+    const rightMethod = isEndpointTool(right) ? right.method : "WORKFLOW";
+    return leftMethod.localeCompare(rightMethod);
   });
 }
 
@@ -71,6 +76,10 @@ function groupToolsByTag(tools: ToolDefinition[]): TagGroup[] {
 }
 
 function formatEndpointLabel(tool: ToolDefinition): string {
+  if (!isEndpointTool(tool)) {
+    const description = truncateDescription(tool.description || tool.name);
+    return `[${getPrimaryTag(tool)}] [WORKFLOW] ${tool.name} - ${description}`;
+  }
   const description = truncateDescription(tool.description || `${tool.method} ${tool.path}`);
   return `[${getPrimaryTag(tool)}] [${tool.method.toUpperCase()}] ${tool.path} - ${description}`;
 }

@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
-import type { ToolDefinition, ToolParameter } from "../core.js";
+import { isWorkflowTool, type ToolDefinition, type ToolParameter } from "../core.js";
 import { toJsonSchema, truncateText } from "../../../core/src/utils/schema-utils.js";
 
 const DEFAULT_LIST_TOOLS_TIMEOUT_MS = 10_000;
@@ -38,6 +38,10 @@ function normalizeType(type: string): string {
 }
 
 function buildExpectedInputSchema(tool: ToolDefinition): Record<string, unknown> {
+  if (isWorkflowTool(tool)) {
+    return JSON.parse(JSON.stringify(tool.inputSchema)) as Record<string, unknown>;
+  }
+
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
@@ -215,6 +219,10 @@ function sampleValueFromSchema(schema: unknown, fieldName?: string): unknown {
 }
 
 function buildLiveInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+  if (isWorkflowTool(tool)) {
+    return sampleValueFromSchema(tool.inputSchema, tool.name) as Record<string, unknown>;
+  }
+
   const args: Record<string, unknown> = {};
 
   for (const parameter of tool.parameters) {

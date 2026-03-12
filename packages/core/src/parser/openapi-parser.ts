@@ -2,9 +2,9 @@ import SwaggerParser from "@apidevtools/swagger-parser";
 
 import type {
   AuthConfig,
+  EndpointToolDefinition,
   MCPForgeIR,
   RequestBodyDef,
-  ToolDefinition,
   ToolParameter,
 } from "./types.js";
 import { inferSchemaType, toJsonSchema, toSnakeCase, truncateText } from "../utils/schema-utils.js";
@@ -479,7 +479,7 @@ function convertOperationToTool(
   path: string,
   pathItem: OpenAPIPathItem,
   operation: OpenAPIOperation,
-): ToolDefinition {
+): EndpointToolDefinition {
   const operationId =
     typeof operation.operationId === "string" && operation.operationId.trim() ? operation.operationId.trim() : undefined;
   const name = normalizeToolName(operationId, method, path);
@@ -497,7 +497,8 @@ function convertOperationToTool(
     .map((parameter) => mapParameterToToolParameter(parameter))
     .filter((parameter): parameter is ToolParameter => Boolean(parameter));
 
-  const tool: ToolDefinition = {
+  const tool: EndpointToolDefinition = {
+    kind: "endpoint",
     name,
     description: resolvedDescription,
     method: method.toUpperCase(),
@@ -520,7 +521,7 @@ export async function parseOpenAPISpec(specSource: string): Promise<MCPForgeIR> 
     const dereferenced = (await parser.dereference(specSource)) as OpenAPIDocument;
     const paths = asRecord(dereferenced.paths);
 
-    const tools: ToolDefinition[] = [];
+    const tools: EndpointToolDefinition[] = [];
     let rawEndpointCount = 0;
 
     for (const [path, pathItemRaw] of Object.entries(paths)) {

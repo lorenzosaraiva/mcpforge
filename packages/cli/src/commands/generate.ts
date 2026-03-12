@@ -12,10 +12,8 @@ import type { Command } from "commander";
 
 import { loadConfig, type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  applyOptimizedToolSuggestions,
-  deriveSuggestedSelectionValues,
-  filterIRBySelectedTools,
   resolveSelectedToolsForIR,
 } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
@@ -70,18 +68,6 @@ function resolveOutputDirectory(configOutputDir: string, configDir: string): str
   return resolve(configDir, configOutputDir || ".");
 }
 
-function buildFinalIR(
-  sourceIR: MCPForgeIR,
-  optimizedIR: MCPForgeIR | undefined,
-  optimized: boolean,
-  selectedTools: readonly string[],
-): MCPForgeIR {
-  return filterIRBySelectedTools(
-    applyOptimizedToolSuggestions(sourceIR, optimized ? optimizedIR : undefined),
-    selectedTools,
-  );
-}
-
 export function registerGenerateCommand(program: Command): void {
   program
     .command("generate")
@@ -91,6 +77,8 @@ export function registerGenerateCommand(program: Command): void {
     .option("--standard", "Use standard optimization mode (broader tool coverage)")
     .option("--max-tools <number>", "Set max tools target for optimization mode")
     .option("--pick", "Interactively re-pick which endpoints become tools")
+    .option("--workflows", "Generate task-oriented workflow tools")
+    .option("--raw-endpoints", "Disable workflow planning and generate raw endpoint tools")
     .action(
       async (
         options: {
@@ -99,6 +87,8 @@ export function registerGenerateCommand(program: Command): void {
           standard?: boolean;
           maxTools?: string;
           pick?: boolean;
+          workflows?: boolean;
+          rawEndpoints?: boolean;
         },
       ) => {
         intro("mcpforge generate");
@@ -117,6 +107,10 @@ export function registerGenerateCommand(program: Command): void {
 
         const optimizerMode = resolveOptimizationMode(options, config.optimizerMode);
         const maxTools = resolveMaxTools(options.maxTools, optimizerMode, config.maxTools);
+        if (options.workflows && options.rawEndpoints) {
+          throw new Error("Use either --workflows or --raw-endpoints, not both.");
+        }
+        const workflowEnabled = options.workflows ?? (options.rawEndpoints ? false : config.workflowEnabled);
 
         let optimized = config.optimized;
         let optimizedIR = config.optimizedIR;
@@ -144,7 +138,13 @@ export function registerGenerateCommand(program: Command): void {
           }
         }
 
-        let selectedTools = resolveSelectedToolsForIR(sourceIR, config.selectedTools);
+        const candidateIR = buildCandidateIR({
+          sourceIR,
+          optimizedIR: optimized ? optimizedIR : undefined,
+          workflowEnabled,
+          maxTools,
+        });
+        let selectedTools = resolveSelectedToolsForIR(candidateIR, config.selectedTools);
 
         if (options.pick) {
           if (isNonInteractiveRuntime()) {
@@ -157,21 +157,34 @@ export function registerGenerateCommand(program: Command): void {
             }
 
             const defaultSelectedTools =
-              options.optimize && optimizedIR
-                ? deriveSuggestedSelectionValues(sourceIR, optimizedIR)
-                : selectedTools;
-            const pickResult = await pickToolsFromIR(sourceIR, {
+              workflowEnabled
+                ? selectedTools
+                : getDefaultSelectedTools({
+                    sourceIR,
+                    optimizedIR: optimized ? optimizedIR : undefined,
+                    workflowEnabled,
+                    maxTools,
+                  });
+            const pickResult = await pickToolsFromIR(candidateIR, {
               defaultSelectedTools,
-              message: "Select endpoints to regenerate as tools",
+              message: workflowEnabled
+                ? "Select workflow and fallback tools to regenerate"
+                : "Select endpoints to regenerate as tools",
             });
             selectedTools = pickResult.selectedTools;
             log.info(
-              `Selected ${selectedTools.length} endpoint(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+              `Selected ${selectedTools.length} tool(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
             );
           }
         }
 
-        const finalIR = buildFinalIR(sourceIR, optimizedIR, optimized, selectedTools);
+        const finalIR = buildFinalIR({
+          sourceIR,
+          optimizedIR: optimized ? optimizedIR : undefined,
+          workflowEnabled,
+          maxTools,
+          selectedTools,
+        });
 
         const outputDir = resolveOutputDirectory(config.outputDir, configDir);
         const generateSpinner = spinner();
@@ -179,6 +192,7 @@ export function registerGenerateCommand(program: Command): void {
         await generateTypeScriptMCPServer(finalIR, {
           outputDir,
           projectName: basename(outputDir),
+          sourceIR,
         });
         generateSpinner.stop("Regeneration complete.");
 
@@ -188,12 +202,14 @@ export function registerGenerateCommand(program: Command): void {
           apiName: config.apiName,
           outputDir: config.outputDir,
           optimized,
+          workflowEnabled,
           optimizerMode,
           maxTools,
           selectedTools,
           ir: finalIR,
           sourceIR,
           ...(optimized && optimizedIR ? { optimizedIR } : {}),
+          ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
           ...(config.scrapedDocs ? { scrapedDocs: config.scrapedDocs } : {}),
         };
         await writeConfigFile(configPath, updatedConfig);

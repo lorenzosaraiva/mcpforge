@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
-import type { MCPForgeIR, ToolDefinition } from "../parser/types.js";
+import type { EndpointToolDefinition, MCPForgeIR } from "../parser/types.js";
+import { isEndpointTool } from "../parser/types.js";
 import type { OptimizationOptions, OptimizationResult, OptimizerMode } from "./types.js";
 
 const ToolPrioritySchema = z.enum(["high", "medium", "low"]);
@@ -24,6 +25,7 @@ const RequestBodySchema = z.object({
 });
 
 const ToolDefinitionSchema = z.object({
+  kind: z.literal("endpoint").default("endpoint"),
   name: z.string(),
   description: z.string(),
   method: z.string(),
@@ -212,7 +214,7 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function scoreToolByPreferredTags(tool: ToolDefinition, preferredTags: string[]): number {
+function scoreToolByPreferredTags(tool: EndpointToolDefinition, preferredTags: string[]): number {
   const toolTags = tool.tags.map((tag) => normalizeText(tag));
   const name = normalizeText(tool.name);
   const path = normalizeText(tool.path);
@@ -237,28 +239,29 @@ function selectToolsForOptimization(
   ir: MCPForgeIR,
   options: OptimizationOptions,
   logger: (message: string) => void,
-): ToolDefinition[] {
+): EndpointToolDefinition[] {
+  const endpointTools = ir.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
   const mode = resolveMode(options);
   const maxEndpointsForOptimization =
     options.maxEndpointsForOptimization ??
     (mode === "strict"
       ? DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STRICT
       : DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STANDARD);
-  if (maxEndpointsForOptimization <= 0 || ir.tools.length <= maxEndpointsForOptimization) {
-    return ir.tools;
+  if (maxEndpointsForOptimization <= 0 || endpointTools.length <= maxEndpointsForOptimization) {
+    return endpointTools;
   }
 
   const preferredTags = (options.preferredTagsForOptimization ?? DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS).map((tag) =>
     normalizeText(tag),
   );
-  const scored = ir.tools.map((tool, index) => ({
+  const scored = endpointTools.map((tool, index) => ({
     tool,
     index,
     score: scoreToolByPreferredTags(tool, preferredTags),
   }));
 
   const hasMeaningfulScores = scored.some((entry) => entry.score > 0);
-  let selected: ToolDefinition[];
+  let selected: EndpointToolDefinition[];
 
   if (hasMeaningfulScores) {
     selected = scored
@@ -270,7 +273,7 @@ function selectToolsForOptimization(
       `[mcpforge] Large API detected (${ir.tools.length} tools). Limiting optimization scope to ${selected.length} tools prioritized by tags: ${preferredTags.join(", ")}.`,
     );
   } else {
-    selected = ir.tools.slice(0, maxEndpointsForOptimization);
+    selected = endpointTools.slice(0, maxEndpointsForOptimization);
     logger(
       `[mcpforge] Large API detected (${ir.tools.length} tools). Limiting optimization scope to first ${selected.length} tools.`,
     );
@@ -324,7 +327,7 @@ function resolveMaxTools(options: OptimizationOptions, mode: OptimizerMode): num
   return floored;
 }
 
-function toolPriorityScore(tool: ToolDefinition): number {
+function toolPriorityScore(tool: EndpointToolDefinition): number {
   if (tool.priority === "high") {
     return 0;
   }
@@ -354,7 +357,7 @@ function methodScore(method: string): number {
   return 4;
 }
 
-function capTools(tools: ToolDefinition[], maxTools: number): ToolDefinition[] {
+function capTools(tools: EndpointToolDefinition[], maxTools: number): EndpointToolDefinition[] {
   if (tools.length <= maxTools) {
     return tools;
   }
@@ -450,7 +453,7 @@ function splitIntoChunks<T>(items: T[], chunkSize: number): T[][] {
   return chunks;
 }
 
-function dedupeToolNames(tools: ToolDefinition[]): ToolDefinition[] {
+function dedupeToolNames(tools: EndpointToolDefinition[]): EndpointToolDefinition[] {
   const counts = new Map<string, number>();
   return tools.map((tool) => {
     const seen = counts.get(tool.name) ?? 0;
@@ -468,11 +471,11 @@ function dedupeToolNames(tools: ToolDefinition[]): ToolDefinition[] {
 async function optimizeChunkRecursively(
   client: Anthropic,
   baseIR: MCPForgeIR,
-  tools: ToolDefinition[],
+  tools: EndpointToolDefinition[],
   options: OptimizationOptions,
   logger: (message: string) => void,
   retryCount = 0,
-): Promise<ToolDefinition[]> {
+): Promise<EndpointToolDefinition[]> {
   const chunkIR: MCPForgeIR = {
     ...baseIR,
     tools,
@@ -480,7 +483,7 @@ async function optimizeChunkRecursively(
 
   try {
     const optimizedChunk = await optimizeSingleIR(client, chunkIR, options);
-    return optimizedChunk.tools;
+    return optimizedChunk.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
   } catch (error) {
     if (isRateLimitError(error) && retryCount < 2) {
       logger(
@@ -525,20 +528,24 @@ export async function optimizeIRWithAI(
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
   const mode = resolveMode(options);
   const maxTools = resolveMaxTools(options, mode);
+  const endpointIR: MCPForgeIR = {
+    ...ir,
+    tools: ir.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool)),
+  };
 
   if (!apiKey) {
     logger("[mcpforge] ANTHROPIC_API_KEY not found. Skipping AI optimization.");
     return {
-      optimizedIR: ir,
+      optimizedIR: endpointIR,
       skipped: true,
       reason: "ANTHROPIC_API_KEY not configured",
     };
   }
 
   const client = new Anthropic({ apiKey });
-  const selectedTools = selectToolsForOptimization(ir, options, logger);
+  const selectedTools = selectToolsForOptimization(endpointIR, options, logger);
   const scopedIR: MCPForgeIR = {
-    ...ir,
+    ...endpointIR,
     tools: selectedTools,
   };
 
@@ -547,13 +554,16 @@ export async function optimizeIRWithAI(
     (mode === "strict" ? DEFAULT_OPTIMIZATION_CHUNK_SIZE_STRICT : DEFAULT_OPTIMIZATION_CHUNK_SIZE_STANDARD);
   if (selectedTools.length <= optimizationChunkSize) {
     const optimizedIR = await optimizeSingleIR(client, scopedIR, options);
-    if (optimizedIR.tools.length > maxTools) {
+    const optimizedEndpointTools = optimizedIR.tools.filter(
+      (tool): tool is EndpointToolDefinition => isEndpointTool(tool),
+    );
+    if (optimizedEndpointTools.length > maxTools) {
       logger(
-        `[mcpforge] Optimizer returned ${optimizedIR.tools.length} tools in ${mode} mode. Trimming to ${maxTools}.`,
+        `[mcpforge] Optimizer returned ${optimizedEndpointTools.length} tools in ${mode} mode. Trimming to ${maxTools}.`,
       );
-      optimizedIR.tools = capTools(optimizedIR.tools, maxTools);
+      optimizedIR.tools = capTools(optimizedEndpointTools, maxTools);
     }
-    optimizedIR.rawEndpointCount = ir.rawEndpointCount;
+    optimizedIR.rawEndpointCount = endpointIR.rawEndpointCount;
     return {
       optimizedIR,
       skipped: false,
@@ -564,7 +574,7 @@ export async function optimizeIRWithAI(
     `[mcpforge] Running chunked optimization: ${selectedTools.length} tools split in chunks of ${optimizationChunkSize}.`,
   );
   const chunks = splitIntoChunks(selectedTools, optimizationChunkSize);
-  const optimizedTools: ToolDefinition[] = [];
+  const optimizedTools: EndpointToolDefinition[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index] ?? [];
     logger(`[mcpforge] Optimizing chunk ${index + 1}/${chunks.length} (${chunk.length} tools).`);
@@ -574,9 +584,9 @@ export async function optimizeIRWithAI(
 
   return {
     optimizedIR: {
-      ...ir,
+      ...endpointIR,
       tools: capTools(dedupeToolNames(optimizedTools), maxTools),
-      rawEndpointCount: ir.rawEndpointCount,
+      rawEndpointCount: endpointIR.rawEndpointCount,
     },
     skipped: false,
   };
