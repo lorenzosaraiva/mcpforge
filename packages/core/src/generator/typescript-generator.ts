@@ -343,6 +343,13 @@ export async function generateTypeScriptMCPServer(
   );
   fileCount += 1;
 
+  await writeRenderedFile(
+    join(srcDir, "resilience.ts"),
+    join(templateDir, "resilience.ts.hbs"),
+    commonTemplateData,
+  );
+  fileCount += 1;
+
   if (hasAuth) {
     await writeRenderedFile(
       join(srcDir, "auth.ts"),

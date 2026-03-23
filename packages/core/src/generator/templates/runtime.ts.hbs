@@ -1,3 +1,5 @@
+import { resilientFetch } from "./resilience.js";
+
 export interface ToolHandlerContext {
   baseUrl: string;
   authHeaders: Record<string, string>;
@@ -204,7 +206,7 @@ export async function invokeEndpoint(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await resilientFetch(url, {
       method: endpoint.method,
       headers,
       body: requestBody,

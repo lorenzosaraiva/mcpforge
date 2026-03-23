@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/Lorenzo/Documents/Workspace/mcpforge/packages/core/src/**/*.ts)",
+      "Bash(wc -l /c/Users/Lorenzo/Documents/Workspace/mcpforge/packages/cli/src/**/*.ts)"
+    ]
+  }
+}
