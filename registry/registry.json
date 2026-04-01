@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "entries": [
+    {
+      "slug": "stripe",
+      "name": "Stripe Payments",
+      "description": "Optimized Stripe billing and payment operations for agent workflows.",
+      "publisher": "lorenzosaraiva",
+      "version": "1.0.0",
+      "toolCount": 47,
+      "tags": ["payments", "billing"],
+      "optimized": true,
+      "workflowEnabled": true,
+      "publishedAt": "2026-04-01",
+      "entryFile": "entries/stripe.json"
+    }
+  ]
+}

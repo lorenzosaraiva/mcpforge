@@ -18,6 +18,7 @@ import {
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
 
+import { publishProjectToRegistry } from "./publish.js";
 import {
   loadConfig,
   type LoadedMCPForgeConfig,
@@ -506,6 +507,9 @@ export function registerUpdateCommand(program: Command): void {
           optimizerMode: config.optimizerMode,
           maxTools: config.maxTools,
           selectedTools,
+          registrySlug: config.registrySlug,
+          registryVersion: config.registryVersion,
+          publishedAt: config.publishedAt,
           ir: finalIR,
           sourceIR: latest.ir,
           ...(optimized && optimizedIR ? { optimizedIR } : {}),
@@ -523,6 +527,24 @@ export function registerUpdateCommand(program: Command): void {
           ].join("\n"),
           "Update Summary",
         );
+
+        if (updatedConfig.registrySlug && !isNonInteractiveRuntime()) {
+          const republish = await promptConfirm("Re-publish updated server to registry? (y/N)", false);
+          if (republish) {
+            const publishSpinner = spinner();
+            publishSpinner.start(`Publishing ${updatedConfig.registrySlug} back to the registry...`);
+            const publishResult = await publishProjectToRegistry(configDir, {
+              slug: updatedConfig.registrySlug,
+            }, {
+              onWarning: (message) => log.warn(message),
+            });
+            publishSpinner.stop(
+              publishResult.directPush
+                ? `Published ${publishResult.slug}@${publishResult.version}.`
+                : `Opened registry PR for ${publishResult.slug}@${publishResult.version}.`,
+            );
+          }
+        }
 
         outro(
           [

@@ -1,0 +1,44 @@
+{
+  "version": "1",
+  "entries": [
+    {
+      "slug": "stripe-billing",
+      "name": "Stripe Billing",
+      "description": "Billing-focused Stripe workflows for subscriptions and invoicing.",
+      "publisher": "lorenzosaraiva",
+      "version": "1.3.0",
+      "toolCount": 18,
+      "tags": ["payments", "billing"],
+      "optimized": true,
+      "workflowEnabled": true,
+      "publishedAt": "2026-04-01",
+      "entryFile": "entries/stripe-billing.json"
+    },
+    {
+      "slug": "test-api",
+      "name": "Test API",
+      "description": "Fixture registry entry used by CLI tests.",
+      "publisher": "fixture-user",
+      "version": "2.0.0",
+      "toolCount": 2,
+      "tags": ["testing", "payments"],
+      "optimized": true,
+      "workflowEnabled": false,
+      "publishedAt": "2026-03-31",
+      "entryFile": "entries/test-api.json"
+    },
+    {
+      "slug": "stripe",
+      "name": "Stripe Payments",
+      "description": "Payments-focused Stripe workflows and endpoint curation.",
+      "publisher": "lorenzosaraiva",
+      "version": "1.2.0",
+      "toolCount": 47,
+      "tags": ["payments", "billing"],
+      "optimized": true,
+      "workflowEnabled": true,
+      "publishedAt": "2026-03-30",
+      "entryFile": "entries/stripe.json"
+    }
+  ]
+}

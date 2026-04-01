@@ -1,6 +1,8 @@
 export * from "./parser/types.js";
 export { parseOpenAPISpec } from "./parser/openapi-parser.js";
 
+export * from "./registry/types.js";
+
 export * from "./optimizer/types.js";
 export { optimizeIRWithAI } from "./optimizer/ai-optimizer.js";
 

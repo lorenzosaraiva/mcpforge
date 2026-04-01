@@ -1,0 +1,75 @@
+{
+  "slug": "stripe",
+  "name": "Stripe Payments",
+  "description": "Example registry scaffold entry for Stripe payments and billing workflows.",
+  "publisher": "lorenzosaraiva",
+  "version": "1.0.0",
+  "toolCount": 47,
+  "tags": ["payments", "billing"],
+  "optimized": true,
+  "workflowEnabled": true,
+  "publishedAt": "2026-04-01",
+  "entryFile": "entries/stripe.json",
+  "ir": {
+    "apiName": "Stripe Payments",
+    "apiDescription": "Example registry scaffold entry for Stripe payments and billing workflows.",
+    "baseUrl": "https://api.stripe.com",
+    "auth": {
+      "type": "bearer",
+      "scheme": "Bearer",
+      "envVarName": "STRIPE_API_KEY",
+      "required": true,
+      "hasSecuritySchemes": true
+    },
+    "tools": [
+      {
+        "kind": "workflow",
+        "name": "find_customers",
+        "description": "Find Stripe customers by email address.",
+        "tags": ["payments", "billing"],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string"
+            }
+          },
+          "required": ["email"],
+          "additionalProperties": false
+        },
+        "dependsOnOperationIds": ["list_customers"],
+        "steps": [
+          {
+            "id": "list_customers",
+            "operationId": "list_customers",
+            "args": {
+              "email": {
+                "$fromInput": "email"
+              }
+            },
+            "saveAs": "customers"
+          }
+        ],
+        "output": {
+          "$fromStep": "customers"
+        }
+      },
+      {
+        "kind": "endpoint",
+        "name": "create_payment_link",
+        "originalOperationId": "create_payment_link",
+        "description": "Create a Stripe payment link.",
+        "method": "POST",
+        "path": "/v1/payment_links",
+        "parameters": [],
+        "tags": ["payments", "billing"]
+      }
+    ],
+    "rawEndpointCount": 47
+  },
+  "specSource": "https://docs.stripe.com/api",
+  "sourceType": "docs-url",
+  "selectedTools": ["find_customers", "create_payment_link"],
+  "optimizerMode": "strict",
+  "maxTools": 25
+}

@@ -3,6 +3,7 @@
 Generate MCP servers from OpenAPI specs or docs pages, then turn raw API endpoints into a smaller set of tools that are actually useful for agents.
 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
+[![Release 1.0.0](https://img.shields.io/badge/release-1.0.0-blue.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Demo
@@ -22,6 +23,12 @@ The result is closer to "brief the model on the jobs it can do" than "dump the e
 
 ## Quick Start
 
+Fastest path from the registry:
+
+```bash
+npx mcpforge add stripe
+```
+
 From an OpenAPI spec:
 
 ```bash
@@ -38,6 +45,25 @@ Preview without writing files:
 
 ```bash
 npx mcpforge init --dry-run --optimize --workflows https://api.example.com/openapi.json
+```
+
+## Registry
+
+Browse and install community-curated MCP servers:
+
+```bash
+mcpforge search                     # browse all servers
+mcpforge search payments            # search by keyword or tag
+mcpforge add stripe                 # generate Stripe MCP server instantly
+mcpforge add stripe --pick          # generate and customize tools
+```
+
+Publish your optimized server:
+
+```bash
+mcpforge auth login                 # one-time GitHub login
+mcpforge publish                    # publish from current project dir
+mcpforge publish --slug my-api --tags payments,billing
 ```
 
 ## What MCPForge Does
@@ -61,14 +87,22 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 - **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and smoke-tests each public handler over stdio.
 - **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
 
-## Command Summary
+## Commands
 
-- `mcpforge init <spec>` - Parse a spec or docs URL and generate a project. Use `--optimize` for endpoint curation, `--workflows` for task-oriented tools, `--pick` for interactive selection, and `--dry-run` to preview.
-- `mcpforge generate` - Regenerate from `mcpforge.config.json`. Workflow mode, optimization mode, and tool selections are preserved in config.
-- `mcpforge inspect <spec>` - Inspect API structure and warnings. Use `--workflows` to preview the planned public toolset.
-- `mcpforge diff` - Compare the last stored source IR against the latest upstream version. Workflow-enabled projects also get workflow impact reporting.
-- `mcpforge update` - Refresh from upstream changes and regenerate in place. Supports `--workflows`, `--raw-endpoints`, `--pick`, `--optimize`, and `--force`.
-- `mcpforge test` - Rebuilds a generated server, validates registered tools, and smoke-tests public handlers. Use `--live` only when real credentials are configured.
+| Command | What it does |
+|---------|---------------|
+| `mcpforge add <slug>[@version] [output-dir]` | Install a server from the registry. Supports `--optimize`, `--workflows`, and `--pick`. |
+| `mcpforge auth login` | Save a GitHub token for registry publishing. |
+| `mcpforge auth logout` | Remove stored GitHub credentials. |
+| `mcpforge auth status` | Show the stored GitHub login or `not logged in`. |
+| `mcpforge search [query]` | Browse registry entries. Supports `--tags` and `--json`. |
+| `mcpforge publish` | Publish the current project to the registry. Supports `--slug`, `--tags`, `--dir`, and `--draft`. |
+| `mcpforge init <spec>` | Parse a spec or docs URL and generate a project. Use `--optimize`, `--workflows`, `--pick`, and `--dry-run` to control the pipeline. |
+| `mcpforge generate` | Regenerate from `mcpforge.config.json`. Workflow mode, optimization mode, and tool selections are preserved in config. |
+| `mcpforge inspect <spec>` | Inspect API structure and warnings. Use `--workflows` to preview the planned public toolset. |
+| `mcpforge diff` | Compare the last stored source IR against the latest upstream version. Workflow-enabled projects also get workflow impact reporting. |
+| `mcpforge update` | Refresh from upstream changes and regenerate in place. Supports `--workflows`, `--raw-endpoints`, `--pick`, `--optimize`, and `--force`. |
+| `mcpforge test` | Rebuild a generated server, validate registered tools, and smoke-test public handlers. Use `--live` only when real credentials are configured. |
 
 ## Workflow Mode
 
@@ -147,6 +181,8 @@ Use `--live` only when the generated project's `.env` is configured and you want
 
 MCPForge has been exercised against real-world specs across different formats and edge cases.
 
+The registry is also the fastest place to find tested, optimized servers that were already run through MCPForge and published for reuse.
+
 | API | Format | Endpoints | Status |
 |-----|--------|-----------|--------|
 | Twilio | OpenAPI 3.x | 197 | yes |
@@ -163,7 +199,7 @@ Supports OpenAPI 3.0, 3.1, Swagger 2.0, JSON and YAML, circular `$ref`s, and spe
 
 ## Contributing
 
-Contributions are welcome. Open an issue for bugs or ideas, or submit a focused PR.
+Contributions are welcome. Open an issue for bugs or ideas, or submit a focused PR. Registry contribution rules live in [registry/CONTRIBUTING.md](./registry/CONTRIBUTING.md).
 
 ## License
 

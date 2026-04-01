@@ -18,6 +18,9 @@ const ConfigSchema = z
     optimizerMode: z.enum(["strict", "standard"]).optional(),
     maxTools: z.number().int().positive().optional(),
     selectedTools: z.array(z.string()).optional(),
+    registrySlug: z.string().min(1).optional(),
+    registryVersion: z.string().min(1).optional(),
+    publishedAt: z.string().min(1).optional(),
     sourceIR: z.unknown().optional(),
     optimizedIR: z.unknown().optional(),
     workflowIR: z.unknown().optional(),
@@ -43,6 +46,9 @@ export interface MCPForgeConfig {
   optimizerMode: "strict" | "standard";
   maxTools: number;
   selectedTools: string[];
+  registrySlug?: string;
+  registryVersion?: string;
+  publishedAt?: string;
   ir: MCPForgeIR;
   sourceIR: MCPForgeIR;
   optimizedIR?: MCPForgeIR;
@@ -150,6 +156,9 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     optimizerMode: parsedConfig.optimizerMode ?? "strict",
     maxTools: parsedConfig.maxTools ?? 25,
     selectedTools,
+    registrySlug: parsedConfig.registrySlug,
+    registryVersion: parsedConfig.registryVersion,
+    publishedAt: parsedConfig.publishedAt,
     ir,
     sourceIR,
     optimizedIR,

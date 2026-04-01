@@ -1,4 +1,4 @@
-import { cancel, confirm, isCancel, text } from "@clack/prompts";
+import { cancel, confirm, isCancel, password, text } from "@clack/prompts";
 
 function isNonInteractive(): boolean {
   return process.env.MCPFORGE_NON_INTERACTIVE === "1" || !process.stdin.isTTY || !process.stdout.isTTY;
@@ -31,6 +31,24 @@ export async function promptText(message: string, defaultValue?: string): Promis
     message,
     placeholder: defaultValue,
     defaultValue,
+  });
+
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  return String(result).trim();
+}
+
+export async function promptPassword(message: string): Promise<string> {
+  if (isNonInteractive()) {
+    return "";
+  }
+
+  const result = await password({
+    message,
+    mask: "*",
   });
 
   if (isCancel(result)) {

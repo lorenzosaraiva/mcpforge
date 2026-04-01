@@ -1,0 +1,88 @@
+{
+  "slug": "test-api",
+  "name": "Test API",
+  "description": "Fixture registry entry used by CLI tests.",
+  "publisher": "fixture-user",
+  "version": "2.0.0",
+  "toolCount": 2,
+  "tags": ["testing", "payments"],
+  "optimized": true,
+  "workflowEnabled": false,
+  "publishedAt": "2026-03-31",
+  "entryFile": "entries/test-api.json",
+  "ir": {
+    "apiName": "Test API",
+    "apiDescription": "Fixture registry entry used by CLI tests.",
+    "baseUrl": "https://api.example.com",
+    "auth": {
+      "type": "api-key",
+      "headerName": "Authorization",
+      "envVarName": "TEST_API_KEY",
+      "required": true,
+      "hasSecuritySchemes": true
+    },
+    "tools": [
+      {
+        "kind": "endpoint",
+        "name": "list_things",
+        "originalOperationId": "list_things",
+        "description": "List things",
+        "method": "GET",
+        "path": "/things",
+        "parameters": [],
+        "tags": ["things"]
+      },
+      {
+        "kind": "endpoint",
+        "name": "create_thing",
+        "originalOperationId": "create_thing",
+        "description": "Create a thing",
+        "method": "POST",
+        "path": "/things",
+        "parameters": [],
+        "tags": ["things"]
+      }
+    ],
+    "rawEndpointCount": 2
+  },
+  "specSource": "https://api.example.com/openapi.json",
+  "sourceType": "openapi",
+  "selectedTools": ["list_things", "create_thing"],
+  "optimizerMode": "strict",
+  "maxTools": 25,
+  "sourceIR": {
+    "apiName": "Test API",
+    "apiDescription": "Fixture registry entry used by CLI tests.",
+    "baseUrl": "https://api.example.com",
+    "auth": {
+      "type": "api-key",
+      "headerName": "Authorization",
+      "envVarName": "TEST_API_KEY",
+      "required": true,
+      "hasSecuritySchemes": true
+    },
+    "tools": [
+      {
+        "kind": "endpoint",
+        "name": "list_things",
+        "originalOperationId": "list_things",
+        "description": "List things",
+        "method": "GET",
+        "path": "/things",
+        "parameters": [],
+        "tags": ["things"]
+      },
+      {
+        "kind": "endpoint",
+        "name": "create_thing",
+        "originalOperationId": "create_thing",
+        "description": "Create a thing",
+        "method": "POST",
+        "path": "/things",
+        "parameters": [],
+        "tags": ["things"]
+      }
+    ],
+    "rawEndpointCount": 2
+  }
+}

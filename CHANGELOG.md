@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 1.0.0 (2026-04-01)
+
+- Added the MCPForge registry scaffold under `registry/`, including `registry.json`, per-entry payloads, and registry contribution guidance.
+- Added registry-aware CLI commands: `auth`, `publish`, `add`, and `search`.
+- Added GitHub credential storage plus publish flows for direct owner pushes or fork-and-PR publishing.
+- Added registry metadata to `mcpforge.config.json` and preserved it across `generate` and `update`.
+- Added post-update re-publish prompting for projects that already have a published registry slug.
+- Added Vitest coverage for credentials, registry install flows, registry publish flows, and registry search filtering.
 
 - Added task-oriented workflow planning with `--workflows`, including deterministic workflow execution in generated servers.
 - Added workflow-aware regeneration, diffing, and update impact reporting.
