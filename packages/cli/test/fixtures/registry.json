@@ -25,6 +25,16 @@
       "optimized": true,
       "workflowEnabled": false,
       "publishedAt": "2026-03-31",
+      "verification": {
+        "status": "passed",
+        "mode": "mock",
+        "verifiedAt": "2026-03-31T12:00:00.000Z",
+        "compatibilityVersion": "1",
+        "toolCount": 2,
+        "passedToolCount": 2,
+        "skippedToolCount": 0,
+        "failedToolCount": 0
+      },
       "entryFile": "entries/test-api.json"
     },
     {

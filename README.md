@@ -1,6 +1,6 @@
 # MCPForge
 
-Generate MCP servers from OpenAPI specs or docs pages, then turn raw API endpoints into a smaller set of tools that are actually useful for agents.
+Generate MCP servers from OpenAPI specs or docs pages, then verify generated request compatibility before you publish or install them.
 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
 [![Release 1.0.0](https://img.shields.io/badge/release-1.0.0-blue.svg)](./CHANGELOG.md)
@@ -74,7 +74,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - Plans task-oriented workflow tools with `--workflows`
 - Generates a complete TypeScript MCP server with auth scaffolding and docs
 - Detects upstream spec drift and reports risk-scored breaking changes
-- Rebuilds and smoke-tests generated servers over stdio with `mcpforge test`
+- Verifies generated request compatibility over stdio with `mcpforge test`
 
 ## Feature Overview
 
@@ -84,8 +84,9 @@ mcpforge publish --slug my-api --tags payments,billing
 - **Interactive selection** (`--pick`) - Lets you choose the exact public tools to expose after planning and optimization.
 - **Breaking change detection** (`diff`) - Compares stored source IR against the latest upstream spec and reports high, medium, and low-risk changes.
 - **Workflow-aware update flow** (`update`) - Rechecks upstream APIs, reports workflow impact, and regenerates in place.
-- **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and smoke-tests each public handler over stdio.
+- **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and verifies request construction against a local mock upstream before optional live calls.
 - **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
+- **Verification-aware publishing** (`publish`) - Public registry publishing now requires a successful verification run by default, and registry entries expose verification metadata to installers.
 
 ## Commands
 
@@ -96,13 +97,13 @@ mcpforge publish --slug my-api --tags payments,billing
 | `mcpforge auth logout` | Remove stored GitHub credentials. |
 | `mcpforge auth status` | Show the stored GitHub login or `not logged in`. |
 | `mcpforge search [query]` | Browse registry entries. Supports `--tags` and `--json`. |
-| `mcpforge publish` | Publish the current project to the registry. Supports `--slug`, `--tags`, `--dir`, and `--draft`. |
+| `mcpforge publish` | Publish the current project to the registry. Requires a fresh successful `mcpforge test` by default. Supports `--slug`, `--tags`, `--dir`, `--draft`, and `--allow-unverified`. |
 | `mcpforge init <spec>` | Parse a spec or docs URL and generate a project. Use `--optimize`, `--workflows`, `--pick`, and `--dry-run` to control the pipeline. |
 | `mcpforge generate` | Regenerate from `mcpforge.config.json`. Workflow mode, optimization mode, and tool selections are preserved in config. |
 | `mcpforge inspect <spec>` | Inspect API structure and warnings. Use `--workflows` to preview the planned public toolset. |
 | `mcpforge diff` | Compare the last stored source IR against the latest upstream version. Workflow-enabled projects also get workflow impact reporting. |
 | `mcpforge update` | Refresh from upstream changes and regenerate in place. Supports `--workflows`, `--raw-endpoints`, `--pick`, `--optimize`, and `--force`. |
-| `mcpforge test` | Rebuild a generated server, validate registered tools, and smoke-test public handlers. Use `--live` only when real credentials are configured. |
+| `mcpforge test` | Rebuild a generated server, validate registered tools, and verify request compatibility against a local mock upstream. Use `--live` only when real credentials are configured. |
 
 ## Workflow Mode
 
@@ -171,15 +172,35 @@ By default, `mcpforge test`:
 - runs `npm install` and `npm run build`
 - starts the generated server over stdio
 - verifies `listTools` matches `mcpforge.config.json`
-- calls each public tool with minimal inputs
-- treats structured handler errors as a pass in dry-run mode
-- treats `401` and `403` as auth-required skips
+- starts a local mock upstream server and points `API_BASE_URL` at it
+- calls each public tool with generated compatibility inputs
+- verifies path, query, header, auth, and request-body construction for the supported matrix
+- writes verification metadata back to `mcpforge.config.json`
 
 Use `--live` only when the generated project's `.env` is configured and you want real upstream API calls.
+
+Successful verification is what enables `mcpforge publish` by default.
+
+## Compatibility Matrix
+
+Current verified request compatibility covers:
+
+- Auth: header API keys, query API keys, cookie API keys, bearer tokens, and basic auth
+- Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible payloads
+- Verification path: local mock-upstream validation via `mcpforge test`
+
+Current limitation:
+
+- OAuth token acquisition and refresh are not generated. MCPForge can scaffold token usage when the API presents OAuth as a bearer token, but you must provide and rotate the token externally.
 
 ## Tested Compatibility
 
 MCPForge has been exercised against real-world specs across different formats and edge cases.
+
+Spec compatibility and runtime verification are separate concerns:
+
+- Spec compatibility: parse, inspect, generate, and compile against varied OpenAPI/Swagger inputs.
+- Runtime verification: validate generated request construction against the supported auth/body matrix.
 
 The registry is also the fastest place to find tested, optimized servers that were already run through MCPForge and published for reuse.
 
@@ -196,6 +217,8 @@ The registry is also the fastest place to find tested, optimized servers that we
 | Amadeus | Swagger 2.0 | 1 | yes |
 
 Supports OpenAPI 3.0, 3.1, Swagger 2.0, JSON and YAML, circular `$ref`s, and specs with missing operation IDs. The broader compatibility report is in [examples/compatibility-report.md](./examples/compatibility-report.md).
+
+An example verification output is in [examples/verification-report.md](./examples/verification-report.md).
 
 ## Contributing
 

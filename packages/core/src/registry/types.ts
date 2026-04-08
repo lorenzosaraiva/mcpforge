@@ -1,5 +1,16 @@
 import type { MCPForgeIR } from "../parser/types.js";
 
+export interface RegistryVerificationSummary {
+  status: "passed" | "failed";
+  mode: "mock" | "live";
+  verifiedAt: string;
+  compatibilityVersion: string;
+  toolCount?: number;
+  passedToolCount?: number;
+  skippedToolCount?: number;
+  failedToolCount?: number;
+}
+
 export interface RegistryIndex {
   version: string;
   entries: RegistryIndexEntry[];
@@ -16,6 +27,7 @@ export interface RegistryIndexEntry {
   optimized: boolean;
   workflowEnabled: boolean;
   publishedAt: string;
+  verification?: RegistryVerificationSummary;
   entryFile: string;
 }
 

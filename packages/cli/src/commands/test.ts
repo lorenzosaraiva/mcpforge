@@ -5,7 +5,17 @@ import { join, resolve } from "node:path";
 import { intro, log, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
 
-import { type LoadedMCPForgeConfig, loadConfig } from "../utils/config.js";
+import {
+  CURRENT_COMPATIBILITY_VERSION,
+  type LoadedMCPForgeConfig,
+  loadConfig,
+  writeConfigFile,
+} from "../utils/config.js";
+import {
+  createCompatibilityHarness,
+  runCompatibilityTests,
+  type CompatibilityHarness,
+} from "../utils/compatibility-runner.js";
 import { connectToMCPServer, type MCPServerConnection } from "../utils/mcp-client.js";
 import {
   runInvocationTests,
@@ -23,6 +33,7 @@ interface TestCommandOptions {
 
 interface ResolvedServerContext {
   config: LoadedMCPForgeConfig;
+  configPath: string;
   serverDir: string;
 }
 
@@ -216,6 +227,7 @@ async function resolveServerContext(rawDir: string | undefined): Promise<Resolve
     const resolvedDir = resolveOutputDirectory(config.outputDir, serverDir);
     return {
       config,
+      configPath,
       serverDir: resolvedDir,
     };
   }
@@ -230,6 +242,7 @@ async function resolveServerContext(rawDir: string | undefined): Promise<Resolve
   const config = await loadConfig(configPath);
   return {
     config,
+    configPath,
     serverDir: resolveOutputDirectory(config.outputDir, cwd),
   };
 }
@@ -250,6 +263,58 @@ function summarizeInvocationResults(results: ToolTestResult[]): string {
   return parts.join(", ");
 }
 
+function summarizeVerificationResults(results: ToolTestResult[]): {
+  toolCount: number;
+  passedToolCount: number;
+  skippedToolCount: number;
+  failedToolCount: number;
+} {
+  return {
+    toolCount: results.length,
+    passedToolCount: results.filter((result) => result.status === "pass").length,
+    skippedToolCount: results.filter((result) => result.status === "skipped").length,
+    failedToolCount: results.filter((result) => result.status === "fail").length,
+  };
+}
+
+async function writeVerificationResult(
+  context: ResolvedServerContext,
+  options: {
+    status: "passed" | "failed";
+    mode: "mock" | "live";
+    results: ToolTestResult[];
+  },
+): Promise<void> {
+  const summary = summarizeVerificationResults(options.results);
+  await writeConfigFile(context.configPath, {
+    specSource: context.config.specSource,
+    sourceType: context.config.sourceType,
+    apiName: context.config.apiName,
+    outputDir: context.config.outputDir,
+    optimized: context.config.optimized,
+    workflowEnabled: context.config.workflowEnabled,
+    optimizerMode: context.config.optimizerMode,
+    maxTools: context.config.maxTools,
+    selectedTools: context.config.selectedTools,
+    registrySlug: context.config.registrySlug,
+    registryVersion: context.config.registryVersion,
+    publishedAt: context.config.publishedAt,
+    verification: {
+      status: options.status,
+      mode: options.mode,
+      verifiedAt: new Date().toISOString(),
+      compatibilityVersion: CURRENT_COMPATIBILITY_VERSION,
+      finalIRHash: context.config.expectedFinalIRHash,
+      ...summary,
+    },
+    ir: context.config.ir,
+    sourceIR: context.config.sourceIR,
+    ...(context.config.optimizedIR ? { optimizedIR: context.config.optimizedIR } : {}),
+    ...(context.config.workflowIR ? { workflowIR: context.config.workflowIR } : {}),
+    ...(context.config.scrapedDocs ? { scrapedDocs: context.config.scrapedDocs } : {}),
+  });
+}
+
 export function registerTestCommand(program: Command): void {
   program
     .command("test")
@@ -261,13 +326,16 @@ export function registerTestCommand(program: Command): void {
       intro("mcpforge test");
 
       let connection: MCPServerConnection | undefined;
+      let compatibilityHarness: CompatibilityHarness | undefined;
+      let resolvedContext: ResolvedServerContext | undefined;
 
       try {
         const timeout = resolveTimeout(options.timeout);
 
         const resolveSpinner = spinner();
         resolveSpinner.start("Resolving generated server...");
-        const { config, serverDir } = await resolveServerContext(options.dir);
+        resolvedContext = await resolveServerContext(options.dir);
+        const { config, serverDir } = resolvedContext;
         assertOutputDirectoryUsable(serverDir);
         resolveSpinner.stop(`Testing project at ${serverDir}`);
 
@@ -284,10 +352,17 @@ export function registerTestCommand(program: Command): void {
         const buildResult = await runCommand(npmCommand, ["run", "build"], serverDir);
         buildSpinner.stop(`npm run build (${formatDuration(buildResult.durationMs)})`);
 
+        if (!options.live) {
+          const compatibilitySpinner = spinner();
+          compatibilitySpinner.start("Starting local compatibility harness...");
+          compatibilityHarness = await createCompatibilityHarness(config.ir.auth);
+          compatibilitySpinner.stop(`Compatibility harness ready at ${compatibilityHarness.baseUrl}`);
+        }
+
         log.step("Server connection");
         const connectSpinner = spinner();
         connectSpinner.start("Starting MCP server over stdio...");
-        connection = await connectToMCPServer(serverDir, timeout);
+        connection = await connectToMCPServer(serverDir, timeout, compatibilityHarness?.env);
         connectSpinner.stop("MCP server started on stdio");
 
         const expectedTools = config.ir.tools;
@@ -307,12 +382,19 @@ export function registerTestCommand(program: Command): void {
           }
         }
 
-        log.step(options.live ? "Tool live tests" : "Tool smoke tests");
-        const invocationResults = await runInvocationTests(connection.client, expectedTools, {
-          live: Boolean(options.live),
-          timeout,
-          getServerStderrOutput: connection.getStderrOutput,
-        });
+        log.step(options.live ? "Tool live tests" : "Tool compatibility tests");
+        const invocationResults = options.live
+          ? await runInvocationTests(connection.client, expectedTools, {
+              live: true,
+              timeout,
+              getServerStderrOutput: connection.getStderrOutput,
+            })
+          : await runCompatibilityTests(connection.client, expectedTools, {
+              timeout,
+              sourceIR: config.sourceIR,
+              getServerStderrOutput: connection.getStderrOutput,
+              harness: compatibilityHarness!,
+            });
 
         const invocationWidth = Math.max(
           24,
@@ -327,6 +409,13 @@ export function registerTestCommand(program: Command): void {
         const summary = summarizeInvocationResults(invocationResults);
 
         if (registrationFailureCount > 0 || invocationFailureCount > 0) {
+          if (resolvedContext) {
+            await writeVerificationResult(resolvedContext, {
+              status: "failed",
+              mode: options.live ? "live" : "mock",
+              results: invocationResults,
+            });
+          }
           const details = [
             `Results: ${summary}`,
             registrationFailureCount > 0
@@ -338,6 +427,14 @@ export function registerTestCommand(program: Command): void {
           outro(details);
           process.exitCode = 1;
           return;
+        }
+
+        if (resolvedContext) {
+          await writeVerificationResult(resolvedContext, {
+            status: "passed",
+            mode: options.live ? "live" : "mock",
+            results: invocationResults,
+          });
         }
 
         outro(`Results: ${summary}`);
@@ -355,6 +452,7 @@ export function registerTestCommand(program: Command): void {
         process.exitCode = 1;
       } finally {
         await connection?.close();
+        await compatibilityHarness?.close();
       }
     });
 }

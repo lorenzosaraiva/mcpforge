@@ -7,9 +7,13 @@ export interface MCPForgeIR {
   rawEndpointCount: number;
 }
 
+export type AuthLocation = "header" | "query" | "cookie";
+
 export interface AuthConfig {
   type: "none" | "api-key" | "bearer" | "oauth2" | "basic";
   headerName?: string;
+  parameterName?: string;
+  location?: AuthLocation;
   scheme?: string;
   envVarName: string;
   description?: string;

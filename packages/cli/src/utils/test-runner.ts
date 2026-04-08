@@ -24,6 +24,11 @@ export interface InvocationTestOptions {
   getServerStderrOutput?: () => string;
 }
 
+interface SampleGenerationOptions {
+  includeOptionalObjectProperties?: boolean;
+  requestBodyContentType?: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -139,7 +144,26 @@ function sampleString(fieldName: string | undefined, format: string | undefined)
   return "test";
 }
 
-function sampleValueFromSchema(schema: unknown, fieldName?: string): unknown {
+function sampleBinaryValue(fieldName: string | undefined, options: SampleGenerationOptions): unknown {
+  if (options.requestBodyContentType?.toLowerCase().includes("multipart/form-data")) {
+    return {
+      content: "sample file content",
+      filename: `${fieldName ?? "file"}.txt`,
+      contentType: "text/plain",
+    };
+  }
+
+  return {
+    base64: Buffer.from("sample-binary", "utf8").toString("base64"),
+    contentType: "application/octet-stream",
+  };
+}
+
+function sampleValueFromSchema(
+  schema: unknown,
+  fieldName?: string,
+  options: SampleGenerationOptions = {},
+): unknown {
   if (!isRecord(schema)) {
     return fieldName ? sampleString(fieldName, undefined) : {};
   }
@@ -188,6 +212,12 @@ function sampleValueFromSchema(schema: unknown, fieldName?: string): unknown {
   const schemaType = resolveSchemaType(schema);
   switch (schemaType) {
     case "string":
+      if (
+        typeof schema.format === "string" &&
+        (schema.format.toLowerCase() === "binary" || schema.format.toLowerCase() === "byte")
+      ) {
+        return sampleBinaryValue(fieldName, options);
+      }
       return sampleString(fieldName, typeof schema.format === "string" ? schema.format : undefined);
     case "integer":
     case "number":
@@ -205,9 +235,13 @@ function sampleValueFromSchema(schema: unknown, fieldName?: string): unknown {
         : [];
 
       const result: Record<string, unknown> = {};
-      const keys = requiredFields.length > 0 ? requiredFields : [];
+      const keys = options.includeOptionalObjectProperties
+        ? Object.keys(properties)
+        : requiredFields.length > 0
+          ? requiredFields
+          : [];
       for (const key of keys) {
-        result[key] = sampleValueFromSchema(properties[key], key);
+        result[key] = sampleValueFromSchema(properties[key], key, options);
       }
       return result;
     }
@@ -218,15 +252,45 @@ function sampleValueFromSchema(schema: unknown, fieldName?: string): unknown {
   }
 }
 
-function buildLiveInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+function buildRequestBodySample(
+  tool: Extract<ToolDefinition, { kind: "endpoint" }>,
+  options: SampleGenerationOptions,
+): unknown {
+  if (!tool.requestBody) {
+    return undefined;
+  }
+
+  return sampleValueFromSchema(
+    toJsonSchema(tool.requestBody.schema),
+    "body",
+    {
+      ...options,
+      requestBodyContentType: tool.requestBody.contentType,
+    },
+  );
+}
+
+function buildInvocationArgs(
+  tool: ToolDefinition,
+  options: {
+    includeOptionalParameters: boolean;
+    includeOptionalObjectProperties?: boolean;
+  },
+): Record<string, unknown> {
   if (isWorkflowTool(tool)) {
-    return sampleValueFromSchema(tool.inputSchema, tool.name) as Record<string, unknown>;
+    return sampleValueFromSchema(
+      tool.inputSchema,
+      tool.name,
+      {
+        includeOptionalObjectProperties: options.includeOptionalObjectProperties,
+      },
+    ) as Record<string, unknown>;
   }
 
   const args: Record<string, unknown> = {};
 
   for (const parameter of tool.parameters) {
-    if (!parameter.required) {
+    if (!parameter.required && !options.includeOptionalParameters) {
       continue;
     }
 
@@ -243,11 +307,27 @@ function buildLiveInvocationArgs(tool: ToolDefinition): Record<string, unknown> 
     args[parameter.name] = sampleValueFromParameter(parameter);
   }
 
-  if (tool.requestBody?.required) {
-    args.body = sampleValueFromSchema(toJsonSchema(tool.requestBody.schema), "body");
+  if (tool.requestBody && (tool.requestBody.required || options.includeOptionalParameters)) {
+    args.body = buildRequestBodySample(tool, {
+      includeOptionalObjectProperties: options.includeOptionalObjectProperties,
+    });
   }
 
   return args;
+}
+
+export function buildLiveInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+  return buildInvocationArgs(tool, {
+    includeOptionalParameters: false,
+    includeOptionalObjectProperties: false,
+  });
+}
+
+export function buildCompatibilityInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+  return buildInvocationArgs(tool, {
+    includeOptionalParameters: true,
+    includeOptionalObjectProperties: true,
+  });
 }
 
 function sampleValueFromParameter(parameter: ToolParameter): unknown {

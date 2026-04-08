@@ -405,10 +405,14 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
 
   if (scheme.type === "apiKey") {
     const inField = scheme.in;
-    const headerName = typeof scheme.name === "string" ? scheme.name : "X-API-Key";
+    const parameterName = typeof scheme.name === "string" ? scheme.name : "X-API-Key";
+    const location =
+      inField === "query" || inField === "cookie" ? inField : "header";
     return {
       type: "api-key",
-      headerName: inField === "header" ? headerName : undefined,
+      headerName: location === "header" ? parameterName : undefined,
+      parameterName,
+      location,
       envVarName: "API_KEY",
       description,
       required: authRequired,
@@ -420,6 +424,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
     return {
       type: "basic",
       headerName: "Authorization",
+      parameterName: "Authorization",
+      location: "header",
       scheme: "Basic",
       envVarName: "BASIC_AUTH",
       description,
@@ -432,6 +438,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
     return {
       type: "bearer",
       headerName: "Authorization",
+      parameterName: "Authorization",
+      location: "header",
       scheme: "Bearer",
       envVarName: "ACCESS_TOKEN",
       description,
@@ -444,6 +452,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
     return {
       type: "oauth2",
       headerName: "Authorization",
+      parameterName: "Authorization",
+      location: "header",
       scheme: "Bearer",
       envVarName: "ACCESS_TOKEN",
       description,
@@ -456,6 +466,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
     return {
       type: "basic",
       headerName: "Authorization",
+      parameterName: "Authorization",
+      location: "header",
       scheme: "Basic",
       envVarName: "BASIC_AUTH",
       description,

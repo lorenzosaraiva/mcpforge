@@ -37,6 +37,7 @@ export interface PublishCommandOptions {
   tags?: string;
   dir?: string;
   draft?: boolean;
+  allowUnverified?: boolean;
 }
 
 export interface PublishCommandDependencies {
@@ -117,6 +118,20 @@ function buildRegistryEntryPayload(
     tags: string[];
   },
 ): RegistryEntrySnapshot {
+  const verification =
+    config.verificationState === "verified" && config.verification
+      ? {
+          status: config.verification.status,
+          mode: config.verification.mode,
+          verifiedAt: config.verification.verifiedAt,
+          compatibilityVersion: config.verification.compatibilityVersion,
+          toolCount: config.verification.toolCount,
+          passedToolCount: config.verification.passedToolCount,
+          skippedToolCount: config.verification.skippedToolCount,
+          failedToolCount: config.verification.failedToolCount,
+        }
+      : undefined;
+
   return {
     slug: options.slug,
     name: config.ir.apiName,
@@ -128,6 +143,7 @@ function buildRegistryEntryPayload(
     optimized: config.optimized,
     workflowEnabled: config.workflowEnabled,
     publishedAt: options.publishedAt,
+    ...(verification ? { verification } : {}),
     entryFile: `entries/${options.slug}.json`,
     ir: config.ir,
     specSource: config.specSource,
@@ -159,6 +175,7 @@ function applyPublishedMetadata(
     registrySlug: published.slug,
     registryVersion: published.version,
     publishedAt: published.publishedAt,
+    ...(config.verification ? { verification: config.verification } : {}),
     ir: config.ir,
     sourceIR: config.sourceIR,
     ...(config.optimizedIR ? { optimizedIR: config.optimizedIR } : {}),
@@ -170,6 +187,8 @@ function applyPublishedMetadata(
 export function validatePublishConfig(config: LoadedMCPForgeConfig): {
   warnings: string[];
   errors: string[];
+} & {
+  verificationState: LoadedMCPForgeConfig["verificationState"];
 } {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -187,6 +206,50 @@ export function validatePublishConfig(config: LoadedMCPForgeConfig): {
   return {
     warnings,
     errors,
+    verificationState: config.verificationState,
+  };
+}
+
+function enforceVerificationPolicy(
+  config: LoadedMCPForgeConfig,
+  options: PublishCommandOptions,
+): {
+  warnings: string[];
+  errors: string[];
+} {
+  if (options.allowUnverified || config.verificationState === "verified") {
+    return {
+      warnings:
+        options.allowUnverified && config.verificationState !== "verified"
+          ? [`Publishing without verification because --allow-unverified was provided (${config.verificationState}).`]
+          : [],
+      errors: [],
+    };
+  }
+
+  if (config.verificationState === "stale") {
+    return {
+      warnings: [],
+      errors: [
+        'Publish aborted because verification is stale. Re-run "mcpforge test" so the current generated output is verified, or pass --allow-unverified.',
+      ],
+    };
+  }
+
+  if (config.verificationState === "failed") {
+    return {
+      warnings: [],
+      errors: [
+        'Publish aborted because the latest verification failed. Fix the generated server or re-run "mcpforge test", or pass --allow-unverified.',
+      ],
+    };
+  }
+
+  return {
+    warnings: [],
+    errors: [
+      'Publish aborted because this project has not been verified yet. Run "mcpforge test" first, or pass --allow-unverified.',
+    ],
   };
 }
 
@@ -235,11 +298,18 @@ export async function publishProjectToRegistry(
 
   const config = await loadProjectConfig(configPath);
   const validation = validatePublishConfig(config);
+  const verificationPolicy = enforceVerificationPolicy(config, options);
   for (const warning of validation.warnings) {
+    onWarning(warning);
+  }
+  for (const warning of verificationPolicy.warnings) {
     onWarning(warning);
   }
   if (validation.errors.length > 0) {
     throw new Error(validation.errors.join(" "));
+  }
+  if (verificationPolicy.errors.length > 0) {
+    throw new Error(verificationPolicy.errors.join(" "));
   }
 
   const credentials = await resolveCredentials(dependencies);
@@ -370,6 +440,7 @@ export function registerPublishCommand(program: Command): void {
     .option("--tags <a,b,c>", "Comma-separated registry tags")
     .option("--dir <path>", "Generated project directory")
     .option("--draft", "Open a draft pull request instead of pushing directly")
+    .option("--allow-unverified", "Bypass the verification gate and publish anyway")
     .action(async (options: PublishCommandOptions) => {
       intro("mcpforge publish");
 

@@ -21,6 +21,14 @@ function formatCapabilityBadge(entry: RegistryIndexEntry): string {
   return "raw";
 }
 
+function formatVerificationBadge(entry: RegistryIndexEntry): string {
+  if (!entry.verification || entry.verification.status !== "passed") {
+    return "unverified";
+  }
+
+  return `verified ${entry.verification.verifiedAt}`;
+}
+
 function padRight(value: string, width: number): string {
   return value.padEnd(width, " ");
 }
@@ -42,11 +50,12 @@ export function formatRegistrySearchResults(entries: readonly RegistryIndexEntry
   const nameWidth = Math.max(...entries.map((entry) => entry.name.length), 20) + 2;
   const toolsWidth = Math.max(...entries.map((entry) => `${entry.toolCount} tools`.length), 8) + 2;
   const capabilityWidth = Math.max(...entries.map((entry) => formatCapabilityBadge(entry).length), 12) + 2;
+  const verificationWidth = Math.max(...entries.map((entry) => formatVerificationBadge(entry).length), 12) + 2;
 
   return entries
     .map(
       (entry) =>
-        `${padRight(entry.slug, slugWidth)}${padRight(entry.name, nameWidth)}${padRight(`${entry.toolCount} tools`, toolsWidth)}${padRight(formatCapabilityBadge(entry), capabilityWidth)}@${entry.publisher}`,
+        `${padRight(entry.slug, slugWidth)}${padRight(entry.name, nameWidth)}${padRight(`${entry.toolCount} tools`, toolsWidth)}${padRight(formatCapabilityBadge(entry), capabilityWidth)}${padRight(formatVerificationBadge(entry), verificationWidth)}@${entry.publisher}`,
     )
     .join("\n");
 }

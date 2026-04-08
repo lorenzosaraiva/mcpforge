@@ -61,6 +61,11 @@ function getDefaultOutputDir(entry: RegistryEntrySnapshot): string {
 }
 
 function buildMetadataCard(entry: RegistryEntrySnapshot): string {
+  const verificationLine =
+    entry.verification?.status === "passed"
+      ? `Verification: verified on ${entry.verification.verifiedAt} (${entry.verification.mode}, compatibility v${entry.verification.compatibilityVersion})`
+      : "Verification: unverified";
+
   return [
     `Name: ${entry.name}`,
     `Description: ${entry.description}`,
@@ -68,6 +73,7 @@ function buildMetadataCard(entry: RegistryEntrySnapshot): string {
     `Tools: ${entry.toolCount}`,
     `Publisher: @${entry.publisher}`,
     `Published: ${entry.publishedAt}`,
+    verificationLine,
   ].join("\n");
 }
 

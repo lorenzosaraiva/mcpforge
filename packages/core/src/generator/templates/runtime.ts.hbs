@@ -1,8 +1,13 @@
 import { resilientFetch } from "./resilience.js";
 
+export interface AuthState {
+  headers: Record<string, string>;
+  queryParams: Record<string, string>;
+}
+
 export interface ToolHandlerContext {
   baseUrl: string;
-  authHeaders: Record<string, string>;
+  auth: AuthState;
 }
 
 export interface EndpointRuntimeDefinition {
@@ -21,6 +26,90 @@ export interface EndpointRuntimeDefinition {
   requestBodyContentType: string;
 }
 
+interface SerializedRequestBody {
+  body: BodyInit;
+  contentTypeHeader?: string;
+  removeContentTypeHeader?: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isBinaryLike(value: unknown): boolean {
+  return value instanceof ArrayBuffer || ArrayBuffer.isView(value) || value instanceof Blob;
+}
+
+function isBinaryDescriptor(
+  value: unknown,
+): value is {
+  base64?: string;
+  content?: string;
+  encoding?: string;
+  filename?: string;
+  contentType?: string;
+} {
+  return (
+    isRecord(value) &&
+    (typeof value.base64 === "string" ||
+      typeof value.content === "string")
+  );
+}
+
+function decodeBase64(value: string): Uint8Array {
+  if (typeof Buffer !== "undefined") {
+    return Uint8Array.from(Buffer.from(value, "base64"));
+  }
+
+  const decoded = atob(value);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function toBlobValue(
+  value: unknown,
+): {
+  blob: Blob;
+  filename?: string;
+} {
+  if (value instanceof Blob) {
+    return { blob: value };
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return { blob: new Blob([value]) };
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    return {
+      blob: new Blob([value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)]),
+    };
+  }
+
+  if (isBinaryDescriptor(value)) {
+    const contentType = typeof value.contentType === "string" ? value.contentType : undefined;
+    if (typeof value.base64 === "string") {
+      return {
+        blob: new Blob([decodeBase64(value.base64)], contentType ? { type: contentType } : undefined),
+        filename: typeof value.filename === "string" ? value.filename : undefined,
+      };
+    }
+
+    const encoding = typeof value.encoding === "string" ? value.encoding.toLowerCase() : "utf8";
+    const content =
+      encoding === "base64" ? decodeBase64(value.content) : value.content;
+    return {
+      blob: new Blob([content], contentType ? { type: contentType } : undefined),
+      filename: typeof value.filename === "string" ? value.filename : undefined,
+    };
+  }
+
+  throw new Error("Unsupported binary payload. Use Blob, ArrayBuffer, typed arrays, or { base64/content, filename?, contentType? }.");
+}
+
 function buildUrl(baseUrl: string, path: string): URL {
   const base = new URL(baseUrl);
   const basePath = base.pathname.endsWith("/") ? base.pathname.slice(0, -1) : base.pathname;
@@ -28,6 +117,60 @@ function buildUrl(baseUrl: string, path: string): URL {
   const joinedPath = `${basePath}/${requestPath}`.replace(/\/{2,}/g, "/");
   base.pathname = joinedPath.startsWith("/") ? joinedPath : `/${joinedPath}`;
   return base;
+}
+
+function findHeaderKey(headers: Record<string, string>, name: string): string | undefined {
+  const normalized = name.toLowerCase();
+  return Object.keys(headers).find((key) => key.toLowerCase() === normalized);
+}
+
+function deleteHeader(headers: Record<string, string>, name: string): void {
+  const existingKey = findHeaderKey(headers, name);
+  if (existingKey) {
+    delete headers[existingKey];
+  }
+}
+
+function setHeader(headers: Record<string, string>, name: string, value: string): void {
+  deleteHeader(headers, name);
+  headers[name] = value;
+}
+
+function mergeCookieHeader(existingValue: string | undefined, nextValue: string): string {
+  return existingValue && existingValue.trim() ? `${existingValue}; ${nextValue}` : nextValue;
+}
+
+function toScalarString(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+
+  return JSON.stringify(value);
+}
+
+function applyAuthToUrl(url: URL, auth: AuthState): void {
+  for (const [name, value] of Object.entries(auth.queryParams)) {
+    url.searchParams.set(name, value);
+  }
+}
+
+function applyAuthToHeaders(headers: Record<string, string>, auth: AuthState): void {
+  for (const [name, value] of Object.entries(auth.headers)) {
+    if (name.toLowerCase() === "cookie") {
+      const cookieKey = findHeaderKey(headers, name) ?? name;
+      headers[cookieKey] = mergeCookieHeader(headers[cookieKey], value);
+      continue;
+    }
+    setHeader(headers, name, value);
+  }
 }
 
 function getPathValue(source: unknown, path: string): unknown {
@@ -96,6 +239,172 @@ function isReferenceObject(value: unknown): value is { $fromInput?: string; $fro
   return keys[0] === "$fromInput" || keys[0] === "$fromStep";
 }
 
+function isJsonContentType(contentType: string): boolean {
+  return contentType.includes("application/json") || contentType.endsWith("+json");
+}
+
+function isUrlEncodedContentType(contentType: string): boolean {
+  return contentType.includes("application/x-www-form-urlencoded");
+}
+
+function isMultipartContentType(contentType: string): boolean {
+  return contentType.includes("multipart/form-data");
+}
+
+function isTextLikeContentType(contentType: string): boolean {
+  return (
+    contentType.startsWith("text/") ||
+    contentType.includes("application/xml") ||
+    contentType.includes("text/xml") ||
+    contentType.includes("application/graphql")
+  );
+}
+
+function appendUrlEncodedValue(params: URLSearchParams, key: string, value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      appendUrlEncodedValue(params, key, entry);
+    }
+    return;
+  }
+
+  if (isBinaryLike(value) || isBinaryDescriptor(value)) {
+    throw new Error(`Field "${key}" cannot be urlencoded from binary input.`);
+  }
+
+  params.append(key, toScalarString(value));
+}
+
+function toUrlEncodedBody(bodyInput: unknown): string {
+  if (typeof bodyInput === "string") {
+    return bodyInput;
+  }
+
+  if (bodyInput instanceof URLSearchParams) {
+    return bodyInput.toString();
+  }
+
+  if (!isRecord(bodyInput)) {
+    throw new Error("application/x-www-form-urlencoded requests require a string, URLSearchParams, or plain object body.");
+  }
+
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(bodyInput)) {
+    appendUrlEncodedValue(params, key, value);
+  }
+  return params.toString();
+}
+
+function appendFormDataValue(formData: FormData, key: string, value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      appendFormDataValue(formData, key, entry);
+    }
+    return;
+  }
+
+  if (isBinaryLike(value) || isBinaryDescriptor(value)) {
+    const { blob, filename } = toBlobValue(value);
+    if (filename) {
+      formData.append(key, blob, filename);
+    } else {
+      formData.append(key, blob);
+    }
+    return;
+  }
+
+  formData.append(key, toScalarString(value));
+}
+
+function toMultipartBody(bodyInput: unknown): FormData {
+  if (bodyInput instanceof FormData) {
+    return bodyInput;
+  }
+
+  if (!isRecord(bodyInput)) {
+    throw new Error("multipart/form-data requests require a FormData instance or plain object body.");
+  }
+
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(bodyInput)) {
+    appendFormDataValue(formData, key, value);
+  }
+  return formData;
+}
+
+function toTextBody(bodyInput: unknown, contentType: string): string | Blob {
+  if (typeof bodyInput === "string") {
+    return bodyInput;
+  }
+
+  if (typeof bodyInput === "number" || typeof bodyInput === "boolean" || typeof bodyInput === "bigint") {
+    return String(bodyInput);
+  }
+
+  if (isBinaryLike(bodyInput) || isBinaryDescriptor(bodyInput)) {
+    return toBlobValue(bodyInput).blob;
+  }
+
+  throw new Error(`Content type "${contentType}" expects a text or binary-compatible body.`);
+}
+
+function toBinaryBody(bodyInput: unknown, contentType: string): BodyInit {
+  if (typeof bodyInput === "string" || isBinaryLike(bodyInput)) {
+    return bodyInput as BodyInit;
+  }
+
+  if (isBinaryDescriptor(bodyInput)) {
+    return toBlobValue(bodyInput).blob;
+  }
+
+  throw new Error(`Content type "${contentType}" expects a string, Blob, ArrayBuffer, typed array, or binary descriptor body.`);
+}
+
+function serializeRequestBody(contentType: string, bodyInput: unknown): SerializedRequestBody {
+  const normalizedContentType = contentType.split(";")[0]?.trim().toLowerCase() ?? "application/json";
+
+  if (isJsonContentType(normalizedContentType)) {
+    return {
+      body: JSON.stringify(bodyInput),
+      contentTypeHeader: contentType,
+    };
+  }
+
+  if (isUrlEncodedContentType(normalizedContentType)) {
+    return {
+      body: toUrlEncodedBody(bodyInput),
+      contentTypeHeader: contentType,
+    };
+  }
+
+  if (isMultipartContentType(normalizedContentType)) {
+    return {
+      body: toMultipartBody(bodyInput),
+      removeContentTypeHeader: true,
+    };
+  }
+
+  if (isTextLikeContentType(normalizedContentType)) {
+    return {
+      body: toTextBody(bodyInput, contentType),
+      contentTypeHeader: contentType,
+    };
+  }
+
+  return {
+    body: toBinaryBody(bodyInput, contentType),
+    contentTypeHeader: contentType,
+  };
+}
+
 export function resolveWorkflowValue(
   value: unknown,
   input: Record<string, unknown>,
@@ -161,14 +470,16 @@ export async function invokeEndpoint(
 
     if (Array.isArray(value)) {
       for (const item of value) {
-        url.searchParams.append(param.name, String(item));
+        url.searchParams.append(param.name, toScalarString(item));
       }
     } else {
-      url.searchParams.append(param.name, String(value));
+      url.searchParams.append(param.name, toScalarString(value));
     }
   }
 
-  const headers: Record<string, string> = { ...context.authHeaders };
+  applyAuthToUrl(url, context.auth);
+
+  const headers: Record<string, string> = {};
 
   for (const param of endpoint.headerParams) {
     const value = input[param.name];
@@ -179,8 +490,10 @@ export async function invokeEndpoint(
       continue;
     }
 
-    headers[param.name] = String(value);
+    setHeader(headers, param.name, toScalarString(value));
   }
+
+  applyAuthToHeaders(headers, context.auth);
 
   const bodyInput = input.body;
   if (endpoint.requestBodyRequired && (bodyInput === undefined || bodyInput === null)) {
@@ -189,18 +502,13 @@ export async function invokeEndpoint(
 
   let requestBody: BodyInit | undefined;
   if (bodyInput !== undefined && bodyInput !== null) {
-    headers["Content-Type"] = endpoint.requestBodyContentType;
-    if (endpoint.requestBodyContentType.toLowerCase().includes("json")) {
-      requestBody = JSON.stringify(bodyInput);
-    } else if (
-      typeof bodyInput === "string" ||
-      bodyInput instanceof ArrayBuffer ||
-      ArrayBuffer.isView(bodyInput) ||
-      bodyInput instanceof Blob
-    ) {
-      requestBody = bodyInput as BodyInit;
-    } else {
-      requestBody = JSON.stringify(bodyInput);
+    const serializedBody = serializeRequestBody(endpoint.requestBodyContentType, bodyInput);
+    requestBody = serializedBody.body;
+
+    if (serializedBody.removeContentTypeHeader) {
+      deleteHeader(headers, "Content-Type");
+    } else if (serializedBody.contentTypeHeader) {
+      setHeader(headers, "Content-Type", serializedBody.contentTypeHeader);
     }
   }
 

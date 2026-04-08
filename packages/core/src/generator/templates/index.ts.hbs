@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 {{#if hasAuth}}
-import { AUTH_CONFIG, getAuthHeaders } from "./auth.js";
+import { AUTH_CONFIG, resolveAuthState } from "./auth.js";
 {{/if}}
 {{#each tools}}
 import { {{this.handlerFunctionName}} } from "./tools/{{this.handlerFileName}}.js";
@@ -22,13 +22,16 @@ const SERVER_VERSION = "0.1.0";
 const DEFAULT_API_BASE_URL = {{{json baseUrl}}};
 const API_BASE_URL = process.env.API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
 {{#if hasAuth}}
-const AUTH_RESOLUTION = getAuthHeaders(AUTH_CONFIG);
+const AUTH_RESOLUTION = resolveAuthState(AUTH_CONFIG);
 if (AUTH_RESOLUTION.startupWarning) {
   process.stderr.write(`${AUTH_RESOLUTION.startupWarning}\n`);
 }
-const AUTH_HEADERS = AUTH_RESOLUTION.headers;
+const AUTH_STATE = AUTH_RESOLUTION.auth;
 {{else}}
-const AUTH_HEADERS: Record<string, string> = {};
+const AUTH_STATE = {
+  headers: {},
+  queryParams: {},
+};
 {{/if}}
 
 const TOOL_DEFINITIONS = [
@@ -46,7 +49,7 @@ const TOOL_HANDLERS: Record<string, (input: Record<string, unknown>) => Promise<
   {{{json this.name}}}: (input) =>
     {{this.handlerFunctionName}}(input, {
       baseUrl: API_BASE_URL,
-      authHeaders: AUTH_HEADERS,
+      auth: AUTH_STATE,
     }){{#unless @last}},{{/unless}}
 {{/each}}
 };

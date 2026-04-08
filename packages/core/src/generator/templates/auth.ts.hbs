@@ -1,6 +1,8 @@
 export interface RuntimeAuthConfig {
   type: "none" | "api-key" | "bearer" | "oauth2" | "basic";
   headerName?: string;
+  parameterName?: string;
+  location?: "header" | "query" | "cookie";
   scheme?: string;
   envVarName: string;
   description?: string;
@@ -18,22 +20,35 @@ function readEnv(envName: string): string | undefined {
   return value.trim();
 }
 
-export interface AuthHeaderResolution {
+export interface AuthState {
   headers: Record<string, string>;
+  queryParams: Record<string, string>;
+}
+
+export interface AuthResolution {
+  auth: AuthState;
   startupWarning?: string;
 }
 
-export function getAuthHeaders(
+export function resolveAuthState(
   authConfig: RuntimeAuthConfig,
-): AuthHeaderResolution {
+): AuthResolution {
   if (authConfig.type === "none") {
-    return { headers: {} };
+    return {
+      auth: {
+        headers: {},
+        queryParams: {},
+      },
+    };
   }
 
   const envValue = readEnv(authConfig.envVarName);
   if (!envValue) {
     return {
-      headers: {},
+      auth: {
+        headers: {},
+        queryParams: {},
+      },
       startupWarning:
         authConfig.required === true
           ? `WARNING: ${authConfig.envVarName} not set, requests may fail`
@@ -42,30 +57,69 @@ export function getAuthHeaders(
   }
 
   if (authConfig.type === "api-key") {
-    const headerName = authConfig.headerName ?? "X-API-Key";
+    const parameterName =
+      authConfig.parameterName ??
+      authConfig.headerName ??
+      "X-API-Key";
+    const location = authConfig.location ?? "header";
+
+    if (location === "query") {
+      return {
+        auth: {
+          headers: {},
+          queryParams: { [parameterName]: envValue },
+        },
+      };
+    }
+
+    if (location === "cookie") {
+      return {
+        auth: {
+          headers: {
+            Cookie: `${parameterName}=${encodeURIComponent(envValue)}`,
+          },
+          queryParams: {},
+        },
+      };
+    }
+
     return {
-      headers: { [headerName]: envValue },
+      auth: {
+        headers: { [parameterName]: envValue },
+        queryParams: {},
+      },
     };
   }
 
   if (authConfig.type === "basic") {
-    const headerName = authConfig.headerName ?? "Authorization";
+    const headerName = authConfig.headerName ?? authConfig.parameterName ?? "Authorization";
     const encoded =
       envValue.startsWith("Basic ")
         ? envValue
         : `Basic ${Buffer.from(envValue).toString("base64")}`;
     return {
-      headers: { [headerName]: encoded },
+      auth: {
+        headers: { [headerName]: encoded },
+        queryParams: {},
+      },
     };
   }
 
   if (authConfig.type === "bearer" || authConfig.type === "oauth2") {
-    const headerName = authConfig.headerName ?? "Authorization";
+    const headerName = authConfig.headerName ?? authConfig.parameterName ?? "Authorization";
     const scheme = authConfig.scheme ?? "Bearer";
     return {
-      headers: { [headerName]: `${scheme} ${envValue}` },
+      auth: {
+        headers: { [headerName]: `${scheme} ${envValue}` },
+        queryParams: {},
+      },
     };
   }
 
-  return { headers: {} };
+  return {
+    auth: {
+      headers: {},
+      queryParams: {},
+    },
+  };
 }

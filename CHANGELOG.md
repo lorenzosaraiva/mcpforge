@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added generated-runtime support for header/query/cookie API keys plus content-type-aware request serialization for JSON, urlencoded, multipart, text, and binary payloads.
+- Added compatibility verification metadata to `mcpforge.config.json`, including IR hashing and freshness checks.
+- Upgraded `mcpforge test` from a smoke test to a compatibility harness that validates generated requests against a local mock upstream.
+- Added a publish gate that requires a fresh successful verification run by default, with `--allow-unverified` as an explicit override.
+- Added verification metadata to registry entries and surfaced verification state in `search` and `add`.
+- Updated generated project docs and repo docs to document the verified compatibility matrix and current OAuth limitation.
+
 ## 1.0.0 (2026-04-01)
 
 - Added the MCPForge registry scaffold under `registry/`, including `registry.json`, per-entry payloads, and registry contribution guidance.

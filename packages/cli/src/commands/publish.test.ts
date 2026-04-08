@@ -21,6 +21,17 @@ function createLoadedConfig() {
     optimizerMode: "strict" as const,
     maxTools: 25,
     selectedTools: ["list_things", "create_thing"],
+    verification: {
+      status: "passed" as const,
+      mode: "mock" as const,
+      verifiedAt: "2026-04-01T00:00:00.000Z",
+      compatibilityVersion: "1",
+      finalIRHash: "fixture-hash",
+      toolCount: 2,
+      passedToolCount: 2,
+      skippedToolCount: 0,
+      failedToolCount: 0,
+    },
     ir: {
       apiName: "Test API",
       apiDescription: "Fixture API",
@@ -94,6 +105,8 @@ function createLoadedConfig() {
     hasSourceIR: true,
     hasOptimizedIR: false,
     hasWorkflowIR: false,
+    verificationState: "verified" as const,
+    expectedFinalIRHash: "fixture-hash",
   };
 }
 
@@ -284,5 +297,19 @@ describe("publishProjectToRegistry", () => {
     );
     expect(result.directPush).toBe(false);
     expect(result.prUrl).toBe("https://github.com/mcpforge/registry/pull/1");
+  });
+
+  it("rejects unverified projects unless explicitly overridden", async () => {
+    await expect(
+      publishProjectToRegistry(projectDir, {
+        slug: "test-api",
+      }, {
+        loadProjectConfig: vi.fn().mockResolvedValue({
+          ...createLoadedConfig(),
+          verification: undefined,
+          verificationState: "unverified",
+        }),
+      }),
+    ).rejects.toThrow('Run "mcpforge test" first');
   });
 });

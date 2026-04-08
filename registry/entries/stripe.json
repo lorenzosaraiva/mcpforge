@@ -9,6 +9,16 @@
   "optimized": true,
   "workflowEnabled": true,
   "publishedAt": "2026-04-01",
+  "verification": {
+    "status": "passed",
+    "mode": "mock",
+    "verifiedAt": "2026-04-01T12:00:00.000Z",
+    "compatibilityVersion": "1",
+    "toolCount": 47,
+    "passedToolCount": 47,
+    "skippedToolCount": 0,
+    "failedToolCount": 0
+  },
   "entryFile": "entries/stripe.json",
   "ir": {
     "apiName": "Stripe Payments",

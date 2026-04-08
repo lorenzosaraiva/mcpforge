@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
@@ -6,6 +7,20 @@ import { z } from "zod";
 
 import type { MCPForgeIR, ScrapedDocPage } from "../core.js";
 import { getAllToolSelectionValues } from "./tool-selection.js";
+
+export const CURRENT_COMPATIBILITY_VERSION = "1";
+
+const VerificationSchema = z.object({
+  status: z.enum(["passed", "failed"]),
+  mode: z.enum(["mock", "live"]),
+  verifiedAt: z.string().min(1),
+  compatibilityVersion: z.string().min(1),
+  finalIRHash: z.string().min(1),
+  toolCount: z.number().int().nonnegative().optional(),
+  passedToolCount: z.number().int().nonnegative().optional(),
+  skippedToolCount: z.number().int().nonnegative().optional(),
+  failedToolCount: z.number().int().nonnegative().optional(),
+});
 
 const ConfigSchema = z
   .object({
@@ -21,6 +36,7 @@ const ConfigSchema = z
     registrySlug: z.string().min(1).optional(),
     registryVersion: z.string().min(1).optional(),
     publishedAt: z.string().min(1).optional(),
+    verification: VerificationSchema.optional(),
     sourceIR: z.unknown().optional(),
     optimizedIR: z.unknown().optional(),
     workflowIR: z.unknown().optional(),
@@ -36,6 +52,20 @@ const ConfigSchema = z
   })
   .passthrough();
 
+export interface VerificationMetadata {
+  status: "passed" | "failed";
+  mode: "mock" | "live";
+  verifiedAt: string;
+  compatibilityVersion: string;
+  finalIRHash: string;
+  toolCount?: number;
+  passedToolCount?: number;
+  skippedToolCount?: number;
+  failedToolCount?: number;
+}
+
+export type VerificationState = "verified" | "failed" | "stale" | "unverified";
+
 export interface MCPForgeConfig {
   specSource: string;
   sourceType: "openapi" | "docs-url";
@@ -49,6 +79,7 @@ export interface MCPForgeConfig {
   registrySlug?: string;
   registryVersion?: string;
   publishedAt?: string;
+  verification?: VerificationMetadata;
   ir: MCPForgeIR;
   sourceIR: MCPForgeIR;
   optimizedIR?: MCPForgeIR;
@@ -60,6 +91,8 @@ export interface LoadedMCPForgeConfig extends MCPForgeConfig {
   hasSourceIR: boolean;
   hasOptimizedIR: boolean;
   hasWorkflowIR: boolean;
+  verificationState: VerificationState;
+  expectedFinalIRHash: string;
 }
 
 function toKebabCase(value: string): string {
@@ -113,6 +146,43 @@ function resolveSpecSourceForRuntime(
   return fromInitWorkingDirectory;
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+}
+
+export function computeIRHash(ir: MCPForgeIR): string {
+  return createHash("sha256").update(stableStringify(ir)).digest("hex");
+}
+
+export function resolveVerificationState(
+  verification: VerificationMetadata | undefined,
+  ir: MCPForgeIR,
+): VerificationState {
+  if (!verification) {
+    return "unverified";
+  }
+
+  const currentHash = computeIRHash(ir);
+  if (
+    verification.finalIRHash !== currentHash ||
+    verification.compatibilityVersion !== CURRENT_COMPATIBILITY_VERSION
+  ) {
+    return "stale";
+  }
+
+  return verification.status === "passed" ? "verified" : "failed";
+}
+
 export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConfig> {
   let parsedJson: unknown;
   try {
@@ -145,6 +215,8 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     (parsedConfig.workflowIR as MCPForgeIR | undefined) ??
     (parsedConfig.workflowEnabled ? ir : undefined);
   const selectedTools = parsedConfig.selectedTools ?? getAllToolSelectionValues(ir);
+  const verification = parsedConfig.verification as VerificationMetadata | undefined;
+  const expectedFinalIRHash = computeIRHash(ir);
 
   return {
     specSource: resolveSpecSourceForRuntime(parsedConfig.specSource, sourceType, outputDir, configDir),
@@ -159,6 +231,7 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     registrySlug: parsedConfig.registrySlug,
     registryVersion: parsedConfig.registryVersion,
     publishedAt: parsedConfig.publishedAt,
+    verification,
     ir,
     sourceIR,
     optimizedIR,
@@ -167,6 +240,8 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     hasSourceIR,
     hasOptimizedIR,
     hasWorkflowIR,
+    verificationState: resolveVerificationState(verification, ir),
+    expectedFinalIRHash,
   };
 }
 

@@ -10,7 +10,7 @@ export interface MCPServerConnection {
   getStderrOutput: () => string;
 }
 
-function collectEnvironment(): Record<string, string> {
+function collectEnvironment(overrides?: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -19,12 +19,17 @@ function collectEnvironment(): Record<string, string> {
     }
   }
 
+  for (const [key, value] of Object.entries(overrides ?? {})) {
+    env[key] = value;
+  }
+
   return env;
 }
 
 export async function connectToMCPServer(
   serverDir: string,
   timeout: number,
+  envOverrides?: Record<string, string>,
 ): Promise<MCPServerConnection> {
   const builtEntrypoint = join(serverDir, "dist", "index.js");
   if (!existsSync(builtEntrypoint)) {
@@ -37,7 +42,7 @@ export async function connectToMCPServer(
     command: process.execPath,
     args: ["dist/index.js"],
     cwd: serverDir,
-    env: collectEnvironment(),
+    env: collectEnvironment(envOverrides),
     stderr: "pipe",
   });
 

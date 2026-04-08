@@ -1,4 +1,8 @@
-# MCPForge Compatibility Report (2026-03-04)
+# MCPForge Spec Compatibility Report (2026-03-04)
+
+This report tracks parse/init/build compatibility across different upstream specs.
+
+For generated-request verification coverage and sample output, see [verification-report.md](./verification-report.md).
 
 Test command shape used for every spec:
 - `MCPFORGE_NON_INTERACTIVE=1 npx tsx packages/cli/src/index.ts inspect <spec>`
