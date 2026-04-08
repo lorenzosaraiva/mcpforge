@@ -76,9 +76,11 @@ describe("generateTypeScriptMCPServer", () => {
       sourceIR,
     });
 
+    const envExampleContent = await readFile(join(outputDir, ".env.example"), "utf8");
     const runtimeContent = await readFile(join(outputDir, "src", "runtime.ts"), "utf8");
     const handlerContent = await readFile(join(outputDir, "src", "tools", "find_customers.ts"), "utf8");
 
+    expect(envExampleContent).toContain("API_BASE_URL=https://api.example.com");
     expect(runtimeContent).toContain("export async function invokeEndpoint");
     expect(handlerContent).toContain("selectWorkflowOutput");
     expect(handlerContent).toContain("WORKFLOW_STEPS");

@@ -5,6 +5,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!packages/core/src/generator/templates/.env.example.hbs
 examples/*
 !examples/.gitkeep
 !examples/*.md
