@@ -41,6 +41,43 @@ describe("compatibility harness", () => {
     });
   });
 
+  it("provides a mock OAuth token endpoint for OAuth validation", async () => {
+    const harness = await createCompatibilityHarness({
+      type: "oauth2",
+      headerName: "Authorization",
+      parameterName: "Authorization",
+      location: "header",
+      scheme: "Bearer",
+      envVarName: "ACCESS_TOKEN",
+      required: true,
+      hasSecuritySchemes: true,
+      oauthFlow: "clientCredentials",
+      tokenUrl: "https://auth.example.com/oauth/token",
+      scopes: ["customers:read"],
+    });
+    harnesses.push(harness);
+
+    expect(harness.env).toMatchObject({
+      API_BASE_URL: harness.baseUrl,
+      OAUTH_TOKEN_URL: `${harness.baseUrl}/__oauth/token`,
+      OAUTH_CLIENT_ID: "compat-client-id",
+      OAUTH_CLIENT_SECRET: "compat-client-secret",
+    });
+
+    const response = await fetch(harness.env.OAUTH_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      access_token: "compat-oauth-token",
+      token_type: "Bearer",
+    });
+  });
+
   it("accepts a matching request and marks the expectation complete", async () => {
     const tool: EndpointToolDefinition = {
       kind: "endpoint",

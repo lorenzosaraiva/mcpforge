@@ -246,6 +246,28 @@ function compareAuth(oldAuth: AuthConfig, newAuth: AuthConfig): DiffChange[] {
     });
   }
 
+  if ((oldAuth.oauthFlow ?? "") !== (newAuth.oauthFlow ?? "")) {
+    addChange(changes, {
+      ...base,
+      risk: "medium",
+      type: "modified",
+      details: "OAuth flow changed.",
+      before: oldAuth.oauthFlow ?? "(none)",
+      after: newAuth.oauthFlow ?? "(none)",
+    });
+  }
+
+  if ((oldAuth.tokenUrl ?? "") !== (newAuth.tokenUrl ?? "")) {
+    addChange(changes, {
+      ...base,
+      risk: "medium",
+      type: "modified",
+      details: "OAuth token URL changed.",
+      before: oldAuth.tokenUrl ?? "(none)",
+      after: newAuth.tokenUrl ?? "(none)",
+    });
+  }
+
   const oldRequired = oldAuth.required === true;
   const newRequired = newAuth.required === true;
   if (oldRequired !== newRequired) {

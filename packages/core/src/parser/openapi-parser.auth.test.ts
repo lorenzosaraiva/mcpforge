@@ -122,4 +122,41 @@ describe("parseOpenAPISpec auth detection", () => {
       required: true,
     });
   });
+
+  it("preserves OAuth client credentials token metadata", async () => {
+    const specPath = await writeSpec(
+      createSpec(
+        {
+          type: "oauth2",
+          flows: {
+            clientCredentials: {
+              tokenUrl: "https://auth.example.com/oauth/token",
+              scopes: {
+                "customers:read": "Read customers",
+                "customers:write": "Write customers",
+              },
+            },
+          },
+        },
+        { primaryAuth: ["customers:read"] },
+      ),
+    );
+
+    const result = await parseOpenAPISpec(specPath);
+
+    expect(result.auth).toMatchObject({
+      type: "oauth2",
+      oauthFlow: "clientCredentials",
+      tokenUrl: "https://auth.example.com/oauth/token",
+      scopes: ["customers:read", "customers:write"],
+      oauthFlows: [
+        {
+          type: "clientCredentials",
+          tokenUrl: "https://auth.example.com/oauth/token",
+          scopes: ["customers:read", "customers:write"],
+          supported: true,
+        },
+      ],
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { intro, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
-import { isEndpointTool, parseOpenAPISpec, planWorkflowTools, type ToolDefinition } from "../core.js";
+import { isEndpointTool, parseOpenAPISpec, planWorkflowTools, type AuthConfig, type ToolDefinition } from "../core.js";
 
 function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -96,7 +96,7 @@ function buildTagSummary(tools: ToolDefinition[]): string {
   return lines.join("\n");
 }
 
-function buildWarnings(tools: ToolDefinition[]): string[] {
+function buildWarnings(tools: ToolDefinition[], auth: AuthConfig): string[] {
   const warnings: string[] = [];
   const endpointTools = tools.filter((tool) => isEndpointTool(tool));
 
@@ -134,6 +134,21 @@ function buildWarnings(tools: ToolDefinition[]): string[] {
     );
   }
 
+  if (auth.type === "oauth2") {
+    const supportedFlows = auth.oauthFlows?.filter((flow) => flow.supported) ?? [];
+    if (supportedFlows.length === 0 && !auth.tokenUrl) {
+      warnings.push(
+        "OAuth was detected, but no supported token flow metadata was found. Generated servers can still use ACCESS_TOKEN or OAUTH_TOKEN_URL overrides.",
+      );
+    }
+    const unsupportedFlows = auth.oauthFlows?.filter((flow) => !flow.supported).map((flow) => flow.type) ?? [];
+    if (unsupportedFlows.length > 0) {
+      warnings.push(
+        `OAuth flow(s) not generated directly: ${[...new Set(unsupportedFlows)].join(", ")}. Use a refresh token, client credentials, or ACCESS_TOKEN.`,
+      );
+    }
+  }
+
   return warnings;
 }
 
@@ -164,7 +179,7 @@ export function registerInspectCommand(program: Command): void {
 
       note(buildTagSummary(ir.tools), "Endpoints by Tag");
 
-      const warnings = buildWarnings(ir.tools);
+      const warnings = buildWarnings(ir.tools, ir.auth);
       if (warnings.length > 0) {
         note(warnings.map((warning) => `- ${warning}`).join("\n"), "Warnings");
       } else {

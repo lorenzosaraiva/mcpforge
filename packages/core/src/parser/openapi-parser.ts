@@ -4,6 +4,7 @@ import type {
   AuthConfig,
   EndpointToolDefinition,
   MCPForgeIR,
+  OAuthFlowConfig,
   RequestBodyDef,
   ToolParameter,
 } from "./types.js";
@@ -356,6 +357,87 @@ function collectOperationSecurityArrays(document: OpenAPIDocument): unknown[] {
   return arrays;
 }
 
+function extractOAuthScopes(scopes: unknown): string[] {
+  return Object.keys(asRecord(scopes)).filter(Boolean);
+}
+
+function normalizeOAuthFlowName(flowName: string): string {
+  if (flowName === "application") {
+    return "clientCredentials";
+  }
+  if (flowName === "accessCode") {
+    return "authorizationCode";
+  }
+  return flowName;
+}
+
+function isSupportedOAuthFlow(flow: OAuthFlowConfig): boolean {
+  if (!flow.tokenUrl) {
+    return false;
+  }
+  return flow.type === "clientCredentials" || flow.type === "authorizationCode";
+}
+
+function buildOAuthFlow(
+  flowName: string,
+  flowObject: Record<string, unknown>,
+): OAuthFlowConfig {
+  const flow: OAuthFlowConfig = {
+    type: normalizeOAuthFlowName(flowName),
+    authorizationUrl:
+      typeof flowObject.authorizationUrl === "string" && flowObject.authorizationUrl.trim()
+        ? flowObject.authorizationUrl.trim()
+        : undefined,
+    tokenUrl:
+      typeof flowObject.tokenUrl === "string" && flowObject.tokenUrl.trim()
+        ? flowObject.tokenUrl.trim()
+        : undefined,
+    refreshUrl:
+      typeof flowObject.refreshUrl === "string" && flowObject.refreshUrl.trim()
+        ? flowObject.refreshUrl.trim()
+        : undefined,
+    scopes: extractOAuthScopes(flowObject.scopes),
+    supported: false,
+  };
+  flow.supported = isSupportedOAuthFlow(flow);
+  return flow;
+}
+
+function extractOAuthFlows(scheme: Record<string, unknown>): OAuthFlowConfig[] {
+  const openApi3Flows = asRecord(scheme.flows);
+  const flows: OAuthFlowConfig[] = [];
+
+  for (const [flowName, flowObject] of Object.entries(openApi3Flows)) {
+    const flow = buildOAuthFlow(flowName, asRecord(flowObject));
+    flows.push(flow);
+  }
+
+  if (flows.length > 0) {
+    return flows;
+  }
+
+  const swagger2FlowName = typeof scheme.flow === "string" && scheme.flow.trim() ? scheme.flow.trim() : undefined;
+  if (!swagger2FlowName) {
+    return [];
+  }
+
+  const flow = buildOAuthFlow(swagger2FlowName, {
+    authorizationUrl: scheme.authorizationUrl,
+    tokenUrl: scheme.tokenUrl,
+    scopes: scheme.scopes,
+  });
+  return [flow];
+}
+
+function pickOAuthFlow(flows: OAuthFlowConfig[]): OAuthFlowConfig | undefined {
+  return (
+    flows.find((flow) => flow.type === "clientCredentials" && flow.supported) ??
+    flows.find((flow) => flow.type === "authorizationCode" && flow.supported) ??
+    flows.find((flow) => flow.supported) ??
+    flows[0]
+  );
+}
+
 function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   const schemes = resolveSecuritySchemes(document);
   const schemeNames = Object.keys(schemes);
@@ -449,6 +531,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   }
 
   if (scheme.type === "oauth2") {
+    const oauthFlows = extractOAuthFlows(scheme);
+    const selectedOAuthFlow = pickOAuthFlow(oauthFlows);
     return {
       type: "oauth2",
       headerName: "Authorization",
@@ -459,6 +543,11 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
       description,
       required: authRequired,
       hasSecuritySchemes,
+      oauthFlow: selectedOAuthFlow?.type,
+      tokenUrl: selectedOAuthFlow?.tokenUrl,
+      refreshUrl: selectedOAuthFlow?.refreshUrl,
+      scopes: selectedOAuthFlow?.scopes,
+      oauthFlows,
     };
   }
 

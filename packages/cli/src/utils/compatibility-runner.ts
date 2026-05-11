@@ -68,6 +68,9 @@ interface CompatibilityTestOptions {
 
 const DEFAULT_AUTH_TOKEN = "compat-token";
 const DEFAULT_BASIC_AUTH = "compat-user:compat-password";
+const DEFAULT_OAUTH_ACCESS_TOKEN = "compat-oauth-token";
+const DEFAULT_OAUTH_CLIENT_ID = "compat-client-id";
+const DEFAULT_OAUTH_CLIENT_SECRET = "compat-client-secret";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -444,8 +447,7 @@ function resolveWorkflowValue(
 }
 
 interface AppliedAuth {
-  envVarName?: string;
-  envValue?: string;
+  env: Record<string, string>;
   headers: Record<string, string>;
   queryParams: Record<string, string>;
 }
@@ -453,6 +455,7 @@ interface AppliedAuth {
 function applyAuth(auth: AuthConfig): AppliedAuth {
   if (auth.type === "none") {
     return {
+      env: {},
       headers: {},
       queryParams: {},
     };
@@ -466,8 +469,7 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
   if (auth.type === "api-key") {
     if (location === "query") {
       return {
-        envVarName: auth.envVarName,
-        envValue,
+        env: { [auth.envVarName]: envValue },
         headers: {},
         queryParams: { [parameterName]: envValue },
       };
@@ -475,8 +477,7 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
 
     if (location === "cookie") {
       return {
-        envVarName: auth.envVarName,
-        envValue,
+        env: { [auth.envVarName]: envValue },
         headers: {
           Cookie: `${parameterName}=${encodeURIComponent(envValue)}`,
         },
@@ -485,8 +486,7 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
     }
 
     return {
-      envVarName: auth.envVarName,
-      envValue,
+      env: { [auth.envVarName]: envValue },
       headers: { [headerName]: envValue },
       queryParams: {},
     };
@@ -494,8 +494,7 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
 
   if (auth.type === "basic") {
     return {
-      envVarName: auth.envVarName,
-      envValue,
+      env: { [auth.envVarName]: envValue },
       headers: {
         [headerName]: `Basic ${Buffer.from(envValue).toString("base64")}`,
       },
@@ -503,10 +502,23 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
     };
   }
 
+  if (auth.type === "oauth2" && (auth.oauthFlow || auth.tokenUrl || auth.refreshUrl)) {
+    return {
+      env: {
+        OAUTH_TOKEN_URL: "__MCPFORGE_OAUTH_TOKEN_URL__",
+        OAUTH_CLIENT_ID: DEFAULT_OAUTH_CLIENT_ID,
+        OAUTH_CLIENT_SECRET: DEFAULT_OAUTH_CLIENT_SECRET,
+      },
+      headers: {
+        [headerName]: `Bearer ${DEFAULT_OAUTH_ACCESS_TOKEN}`,
+      },
+      queryParams: {},
+    };
+  }
+
   const scheme = auth.scheme ?? "Bearer";
   return {
-    envVarName: auth.envVarName,
-    envValue,
+    env: { [auth.envVarName]: envValue },
     headers: {
       [headerName]: `${scheme} ${envValue}`,
     },
@@ -786,10 +798,11 @@ class HarnessImpl implements CompatibilityHarness {
     const authState = applyAuth(auth);
     this.env = {
       API_BASE_URL: this.baseUrl,
+      ...authState.env,
     };
 
-    if (authState.envVarName && authState.envValue) {
-      this.env[authState.envVarName] = authState.envValue;
+    if (this.env.OAUTH_TOKEN_URL === "__MCPFORGE_OAUTH_TOKEN_URL__") {
+      this.env.OAUTH_TOKEN_URL = `${this.baseUrl}/__oauth/token`;
     }
   }
 
@@ -817,6 +830,12 @@ class HarnessImpl implements CompatibilityHarness {
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const requestUrl = new URL(request.url ?? "/", "http://compat.local");
+    if (requestUrl.pathname === "/__oauth/token") {
+      await this.handleOAuthTokenRequest(request, response);
+      return;
+    }
+
     const expectation = this.state.expectations.shift();
     if (!expectation) {
       this.state.failure = "Received an unexpected upstream request.";
@@ -842,6 +861,41 @@ class HarnessImpl implements CompatibilityHarness {
       response.end(JSON.stringify(expectation.responseBody));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown compatibility server error";
+      this.state.failure = message;
+      response.statusCode = 500;
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ error: message }));
+    }
+  }
+
+  private async handleOAuthTokenRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    try {
+      const rawBody = await readRequestBody(request);
+      const body = new URLSearchParams(rawBody.toString("utf8"));
+      const grantType = body.get("grant_type");
+      if (request.method?.toUpperCase() !== "POST") {
+        this.state.failure = "OAuth token endpoint expected POST.";
+        response.statusCode = 405;
+        response.end();
+        return;
+      }
+      if (grantType !== "client_credentials" && grantType !== "refresh_token") {
+        this.state.failure = `OAuth token endpoint received unsupported grant_type "${grantType ?? "(missing)"}".`;
+        response.statusCode = 400;
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify({ error: this.state.failure }));
+        return;
+      }
+
+      response.statusCode = 200;
+      response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({
+        access_token: DEFAULT_OAUTH_ACCESS_TOKEN,
+        token_type: "Bearer",
+        expires_in: 3600,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown OAuth compatibility server error";
       this.state.failure = message;
       response.statusCode = 500;
       response.setHeader("Content-Type", "application/json");

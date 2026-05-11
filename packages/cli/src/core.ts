@@ -13,6 +13,7 @@ export {
 export type {
   DiffChange,
   DiffResult,
+  AuthConfig,
   EndpointToolDefinition,
   MCPForgeIR,
   OptimizerMode,

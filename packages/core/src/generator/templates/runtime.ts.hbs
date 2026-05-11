@@ -3,6 +3,7 @@ import { resilientFetch } from "./resilience.js";
 export interface AuthState {
   headers: Record<string, string>;
   queryParams: Record<string, string>;
+  resolve?: () => Promise<AuthState>;
 }
 
 export interface ToolHandlerContext {
@@ -171,6 +172,13 @@ function applyAuthToHeaders(headers: Record<string, string>, auth: AuthState): v
     }
     setHeader(headers, name, value);
   }
+}
+
+async function resolveRequestAuth(auth: AuthState): Promise<AuthState> {
+  if (!auth.resolve) {
+    return auth;
+  }
+  return auth.resolve();
 }
 
 function getPathValue(source: unknown, path: string): unknown {
@@ -458,6 +466,7 @@ export async function invokeEndpoint(
   }
 
   const url = buildUrl(context.baseUrl, resolvedPath);
+  const requestAuth = await resolveRequestAuth(context.auth);
 
   for (const param of endpoint.queryParams) {
     const value = input[param.name];
@@ -477,7 +486,7 @@ export async function invokeEndpoint(
     }
   }
 
-  applyAuthToUrl(url, context.auth);
+  applyAuthToUrl(url, requestAuth);
 
   const headers: Record<string, string> = {};
 
@@ -493,7 +502,7 @@ export async function invokeEndpoint(
     setHeader(headers, param.name, toScalarString(value));
   }
 
-  applyAuthToHeaders(headers, context.auth);
+  applyAuthToHeaders(headers, requestAuth);
 
   const bodyInput = input.body;
   if (endpoint.requestBodyRequired && (bodyInput === undefined || bodyInput === null)) {

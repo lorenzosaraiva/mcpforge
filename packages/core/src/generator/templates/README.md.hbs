@@ -31,10 +31,20 @@ npm install
 cp .env.example .env
 ```
 {{#if hasAuth}}
+{{#if (eq auth.type "oauth2")}}
+{{#if authRequired}}
+OAuth credentials are required for authenticated endpoints.
+{{else}}
+OAuth credentials are optional and only needed for authenticated endpoints.
+{{/if}}
+
+For OAuth-backed APIs, you can either set `{{auth.envVarName}}` to a current access token or configure token acquisition with `OAUTH_TOKEN_URL` plus `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` for client credentials. If you have a refresh token, set `OAUTH_REFRESH_TOKEN`; the generated runtime will renew access tokens in memory before calls.
+{{else}}
 {{#if authRequired}}
 The `{{auth.envVarName}}` value is required for authenticated endpoints.
 {{else}}
 The `{{auth.envVarName}}` value is optional and only needed for authenticated endpoints.
+{{/if}}
 {{/if}}
 {{/if}}
 
@@ -110,10 +120,10 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
 
 ## Supported Compatibility Matrix
 
-- Auth: header/query/cookie API keys, bearer tokens, and basic auth.
+- Auth: header/query/cookie API keys, bearer tokens, basic auth, OAuth client credentials, and OAuth refresh-token renewal.
 - Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible bodies.
 - Verification: `npx mcpforge test` validates generated request construction against a local mock upstream before you switch to live calls.
-- Current limitation: OAuth token acquisition and refresh are not generated. Provide a ready-to-use token in `{{auth.envVarName}}` when OAuth-backed APIs expose bearer-style access tokens.
+- OAuth notes: browser-based authorization-code login is not generated. Use an existing refresh token, a client-credentials app, or a ready-to-use access token in `ACCESS_TOKEN`.
 
 ## Troubleshooting
 
@@ -134,4 +144,5 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
 - Server does not appear in the MCP client:
   - Confirm the config path points at `dist/index.js`, then restart the MCP client.
 - OAuth-managed APIs:
-  - Token acquisition and refresh are not scaffolded. Supply a current access token in `{{auth.envVarName}}` and rotate it externally.
+  - For client credentials, set `OAUTH_TOKEN_URL`, `OAUTH_CLIENT_ID`, and `OAUTH_CLIENT_SECRET`.
+  - For refresh-token renewal, set `OAUTH_TOKEN_URL` and `OAUTH_REFRESH_TOKEN`. Some providers also require `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET`.

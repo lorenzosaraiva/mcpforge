@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added OAuth 2.0 token lifecycle support for generated servers, including static access tokens, client credentials, refresh-token renewal, and mock token endpoint coverage in `mcpforge test`.
 - Added generated-runtime support for header/query/cookie API keys plus content-type-aware request serialization for JSON, urlencoded, multipart, text, and binary payloads.
 - Added compatibility verification metadata to `mcpforge.config.json`, including IR hashing and freshness checks.
 - Upgraded `mcpforge test` from a smoke test to a compatibility harness that validates generated requests against a local mock upstream.

@@ -88,6 +88,11 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   delete process.env.API_KEY;
+  delete process.env.ACCESS_TOKEN;
+  delete process.env.OAUTH_TOKEN_URL;
+  delete process.env.OAUTH_CLIENT_ID;
+  delete process.env.OAUTH_CLIENT_SECRET;
+  delete process.env.OAUTH_REFRESH_TOKEN;
 });
 
 describe("generated runtime", () => {
@@ -388,6 +393,112 @@ describe("generated runtime", () => {
         fileName: "hello.txt",
         fileType: "text/plain",
         headers: {},
+      },
+    });
+  });
+
+  it("fetches and injects OAuth client credentials tokens", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-runtime-"));
+    tempDirs.push(outputDir);
+
+    const tool: EndpointToolDefinition = {
+      kind: "endpoint",
+      name: "list_customers",
+      originalOperationId: "list_customers",
+      description: "List customers",
+      method: "GET",
+      path: "/v1/customers",
+      parameters: [],
+      tags: ["customers"],
+    };
+
+    await generateTypeScriptMCPServer(
+      createIR(tool, {
+        type: "oauth2",
+        headerName: "Authorization",
+        parameterName: "Authorization",
+        location: "header",
+        scheme: "Bearer",
+        envVarName: "ACCESS_TOKEN",
+        required: true,
+        hasSecuritySchemes: true,
+        oauthFlow: "clientCredentials",
+        tokenUrl: "https://auth.example.com/oauth/token",
+        scopes: ["customers:read"],
+      }),
+      {
+        outputDir,
+        projectName: "runtime-fixture",
+      },
+    );
+
+    const { invokeEndpoint, resolveAuthState, AUTH_CONFIG } = await importRuntimeModules(outputDir);
+    process.env.OAUTH_CLIENT_ID = "client-id";
+    process.env.OAUTH_CLIENT_SECRET = "client-secret";
+
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (requestUrl === "https://auth.example.com/oauth/token") {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe("grant_type=client_credentials&client_id=client-id&client_secret=client-secret&scope=customers%3Aread");
+        return new Response(
+          JSON.stringify({
+            access_token: "oauth-access-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          headers: init?.headers,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await invokeEndpoint(
+      {
+        name: "list_customers",
+        method: "GET",
+        path: "/v1/customers",
+        pathParams: [],
+        hasPathParams: false,
+        queryParams: [],
+        hasQueryParams: false,
+        headerParams: [],
+        hasHeaderParams: false,
+        hasRequestBody: false,
+        requestBodyRequired: false,
+        requestBodyContentType: "application/json",
+      },
+      {},
+      {
+        baseUrl: "https://api.example.com",
+        auth: resolveAuthState(AUTH_CONFIG).auth,
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      status: 200,
+      data: {
+        headers: {
+          Authorization: "Bearer oauth-access-token",
+        },
       },
     });
   });

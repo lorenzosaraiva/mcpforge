@@ -41,11 +41,27 @@ const ToolDefinitionSchema = z.object({
 const AuthConfigSchema = z.object({
   type: z.enum(["none", "api-key", "bearer", "oauth2", "basic"]),
   headerName: z.string().optional(),
+  parameterName: z.string().optional(),
+  location: z.enum(["header", "query", "cookie"]).optional(),
   scheme: z.string().optional(),
   envVarName: z.string(),
   description: z.string().optional(),
   required: z.boolean().optional(),
   hasSecuritySchemes: z.boolean().optional(),
+  oauthFlow: z.string().optional(),
+  tokenUrl: z.string().optional(),
+  refreshUrl: z.string().optional(),
+  scopes: z.array(z.string()).optional(),
+  oauthFlows: z.array(
+    z.object({
+      type: z.string(),
+      authorizationUrl: z.string().optional(),
+      tokenUrl: z.string().optional(),
+      refreshUrl: z.string().optional(),
+      scopes: z.array(z.string()),
+      supported: z.boolean(),
+    }),
+  ).optional(),
 });
 
 const MCPForgeIRSchema = z.object({

@@ -73,6 +73,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - Curates raw endpoints into a smaller endpoint toolset with `--optimize`
 - Plans task-oriented workflow tools with `--workflows`
 - Generates a complete TypeScript MCP server with auth scaffolding and docs
+- Generates OAuth token handling for client credentials and refresh-token renewal
 - Detects upstream spec drift and reports risk-scored breaking changes
 - Verifies generated request compatibility over stdio with `mcpforge test`
 
@@ -85,6 +86,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - **Breaking change detection** (`diff`) - Compares stored source IR against the latest upstream spec and reports high, medium, and low-risk changes.
 - **Workflow-aware update flow** (`update`) - Rechecks upstream APIs, reports workflow impact, and regenerates in place.
 - **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and verifies request construction against a local mock upstream before optional live calls.
+- **OAuth token lifecycle support** - OAuth-backed generated servers can use a static `ACCESS_TOKEN`, fetch client-credentials tokens, or renew access tokens from `OAUTH_REFRESH_TOKEN`.
 - **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
 - **Verification-aware publishing** (`publish`) - Public registry publishing now requires a successful verification run by default, and registry entries expose verification metadata to installers.
 
@@ -174,7 +176,7 @@ By default, `mcpforge test`:
 - verifies `listTools` matches `mcpforge.config.json`
 - starts a local mock upstream server and points `API_BASE_URL` at it
 - calls each public tool with generated compatibility inputs
-- verifies path, query, header, auth, and request-body construction for the supported matrix
+- verifies path, query, header, auth, OAuth token acquisition, and request-body construction for the supported matrix
 - writes verification metadata back to `mcpforge.config.json`
 
 Use `--live` only when the generated project's `.env` is configured and you want real upstream API calls.
@@ -185,13 +187,15 @@ Successful verification is what enables `mcpforge publish` by default.
 
 Current verified request compatibility covers:
 
-- Auth: header API keys, query API keys, cookie API keys, bearer tokens, and basic auth
+- Auth: header API keys, query API keys, cookie API keys, bearer tokens, basic auth, OAuth client credentials, and OAuth refresh-token renewal
 - Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible payloads
 - Verification path: local mock-upstream validation via `mcpforge test`
 
-Current limitation:
+OAuth notes:
 
-- OAuth token acquisition and refresh are not generated. MCPForge can scaffold token usage when the API presents OAuth as a bearer token, but you must provide and rotate the token externally.
+- Browser-based authorization-code login is not generated.
+- For OAuth APIs, generated servers can use a ready-to-use `ACCESS_TOKEN`, client credentials via `OAUTH_TOKEN_URL`, `OAUTH_CLIENT_ID`, and `OAUTH_CLIENT_SECRET`, or refresh-token renewal via `OAUTH_REFRESH_TOKEN`.
+- `mcpforge test` supplies a local mock OAuth token endpoint so generated request verification does not need live provider credentials.
 
 ## Tested Compatibility
 

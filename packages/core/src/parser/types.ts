@@ -9,6 +9,15 @@ export interface MCPForgeIR {
 
 export type AuthLocation = "header" | "query" | "cookie";
 
+export interface OAuthFlowConfig {
+  type: string;
+  authorizationUrl?: string;
+  tokenUrl?: string;
+  refreshUrl?: string;
+  scopes: string[];
+  supported: boolean;
+}
+
 export interface AuthConfig {
   type: "none" | "api-key" | "bearer" | "oauth2" | "basic";
   headerName?: string;
@@ -19,6 +28,11 @@ export interface AuthConfig {
   description?: string;
   required?: boolean;
   hasSecuritySchemes?: boolean;
+  oauthFlow?: string;
+  tokenUrl?: string;
+  refreshUrl?: string;
+  scopes?: string[];
+  oauthFlows?: OAuthFlowConfig[];
 }
 
 export type ToolPriority = "high" | "medium" | "low";

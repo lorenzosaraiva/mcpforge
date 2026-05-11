@@ -8,9 +8,23 @@ export interface RuntimeAuthConfig {
   description?: string;
   required?: boolean;
   hasSecuritySchemes?: boolean;
+  oauthFlow?: string;
+  tokenUrl?: string;
+  refreshUrl?: string;
+  scopes?: string[];
+  oauthFlows?: Array<{
+    type: string;
+    authorizationUrl?: string;
+    tokenUrl?: string;
+    refreshUrl?: string;
+    scopes: string[];
+    supported: boolean;
+  }>;
 }
 
 export const AUTH_CONFIG: RuntimeAuthConfig = {{{json auth}}};
+
+const OAUTH_EXPIRY_SKEW_MS = 60_000;
 
 function readEnv(envName: string): string | undefined {
   const value = process.env[envName];
@@ -20,14 +34,198 @@ function readEnv(envName: string): string | undefined {
   return value.trim();
 }
 
+function toPositiveNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  return undefined;
+}
+
 export interface AuthState {
   headers: Record<string, string>;
   queryParams: Record<string, string>;
+  resolve?: () => Promise<AuthState>;
 }
 
 export interface AuthResolution {
   auth: AuthState;
   startupWarning?: string;
+}
+
+interface OAuthTokenCache {
+  accessToken: string;
+  tokenType: string;
+  expiresAt?: number;
+  refreshToken?: string;
+}
+
+let oauthTokenCache: OAuthTokenCache | undefined;
+
+function buildHeaderAuth(
+  headerName: string,
+  scheme: string,
+  token: string,
+): AuthState {
+  return {
+    headers: { [headerName]: `${scheme} ${token}` },
+    queryParams: {},
+  };
+}
+
+function getOAuthTokenUrl(authConfig: RuntimeAuthConfig): string | undefined {
+  return readEnv("OAUTH_TOKEN_URL") ?? authConfig.tokenUrl ?? authConfig.refreshUrl;
+}
+
+function getOAuthScopes(authConfig: RuntimeAuthConfig): string | undefined {
+  const envScopes = readEnv("OAUTH_SCOPES");
+  if (envScopes) {
+    return envScopes;
+  }
+  return authConfig.scopes && authConfig.scopes.length > 0 ? authConfig.scopes.join(" ") : undefined;
+}
+
+function hasUsableCachedOAuthToken(cache: OAuthTokenCache | undefined): cache is OAuthTokenCache {
+  if (!cache) {
+    return false;
+  }
+  if (!cache.expiresAt) {
+    return true;
+  }
+  return cache.expiresAt - OAUTH_EXPIRY_SKEW_MS > Date.now();
+}
+
+async function fetchOAuthToken(authConfig: RuntimeAuthConfig): Promise<OAuthTokenCache> {
+  if (hasUsableCachedOAuthToken(oauthTokenCache)) {
+    return oauthTokenCache;
+  }
+
+  const tokenUrl = getOAuthTokenUrl(authConfig);
+  if (!tokenUrl) {
+    throw new Error("OAuth token URL is not configured. Set OAUTH_TOKEN_URL or regenerate from a spec with tokenUrl metadata.");
+  }
+
+  const clientId = readEnv("OAUTH_CLIENT_ID");
+  const clientSecret = readEnv("OAUTH_CLIENT_SECRET");
+  const refreshToken = oauthTokenCache?.refreshToken ?? readEnv("OAUTH_REFRESH_TOKEN");
+  const body = new URLSearchParams();
+
+  if (refreshToken) {
+    body.set("grant_type", "refresh_token");
+    body.set("refresh_token", refreshToken);
+  } else {
+    body.set("grant_type", "client_credentials");
+  }
+
+  if (clientId) {
+    body.set("client_id", clientId);
+  }
+  if (clientSecret) {
+    body.set("client_secret", clientSecret);
+  }
+
+  const scopes = getOAuthScopes(authConfig);
+  if (scopes) {
+    body.set("scope", scopes);
+  }
+
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+  });
+
+  const responseText = await response.text();
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) as Record<string, unknown> : {};
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(`OAuth token request failed (${response.status} ${response.statusText}): ${responseText}`);
+  }
+
+  const accessToken = typeof payload.access_token === "string" ? payload.access_token : undefined;
+  if (!accessToken) {
+    throw new Error("OAuth token response did not include access_token.");
+  }
+
+  const expiresIn = toPositiveNumber(payload.expires_in);
+  const tokenType = typeof payload.token_type === "string" && payload.token_type.trim()
+    ? payload.token_type.trim()
+    : authConfig.scheme ?? "Bearer";
+  oauthTokenCache = {
+    accessToken,
+    tokenType,
+    expiresAt: expiresIn ? Date.now() + expiresIn * 1000 : undefined,
+    refreshToken: typeof payload.refresh_token === "string" && payload.refresh_token.trim()
+      ? payload.refresh_token.trim()
+      : refreshToken,
+  };
+
+  return oauthTokenCache;
+}
+
+function canResolveOAuth(authConfig: RuntimeAuthConfig): boolean {
+  if (readEnv(authConfig.envVarName)) {
+    return true;
+  }
+  if (!getOAuthTokenUrl(authConfig)) {
+    return false;
+  }
+  if (readEnv("OAUTH_REFRESH_TOKEN")) {
+    return true;
+  }
+  return Boolean(readEnv("OAUTH_CLIENT_ID") && readEnv("OAUTH_CLIENT_SECRET"));
+}
+
+function resolveOAuthState(authConfig: RuntimeAuthConfig): AuthResolution {
+  const headerName = authConfig.headerName ?? authConfig.parameterName ?? "Authorization";
+  const staticAccessToken = readEnv(authConfig.envVarName);
+  const hasLifecycleCredentials =
+    Boolean(getOAuthTokenUrl(authConfig)) &&
+    (Boolean(readEnv("OAUTH_REFRESH_TOKEN")) ||
+      Boolean(readEnv("OAUTH_CLIENT_ID") && readEnv("OAUTH_CLIENT_SECRET")));
+
+  if (staticAccessToken && !hasLifecycleCredentials) {
+    return {
+      auth: buildHeaderAuth(headerName, authConfig.scheme ?? "Bearer", staticAccessToken),
+    };
+  }
+
+  if (!canResolveOAuth(authConfig)) {
+    return {
+      auth: {
+        headers: {},
+        queryParams: {},
+      },
+      startupWarning:
+        authConfig.required === true
+          ? `WARNING: OAuth credentials not set. Set ${authConfig.envVarName}, or configure OAUTH_TOKEN_URL plus OAUTH_CLIENT_ID/OAUTH_CLIENT_SECRET or OAUTH_REFRESH_TOKEN.`
+          : undefined,
+    };
+  }
+
+  return {
+    auth: {
+      headers: {},
+      queryParams: {},
+      resolve: async () => {
+        if (staticAccessToken && !hasLifecycleCredentials) {
+          return buildHeaderAuth(headerName, authConfig.scheme ?? "Bearer", staticAccessToken);
+        }
+        const token = await fetchOAuthToken(authConfig);
+        return buildHeaderAuth(headerName, token.tokenType, token.accessToken);
+      },
+    },
+  };
 }
 
 export function resolveAuthState(
@@ -40,6 +238,10 @@ export function resolveAuthState(
         queryParams: {},
       },
     };
+  }
+
+  if (authConfig.type === "oauth2") {
+    return resolveOAuthState(authConfig);
   }
 
   const envValue = readEnv(authConfig.envVarName);
@@ -105,7 +307,7 @@ export function resolveAuthState(
     };
   }
 
-  if (authConfig.type === "bearer" || authConfig.type === "oauth2") {
+  if (authConfig.type === "bearer") {
     const headerName = authConfig.headerName ?? authConfig.parameterName ?? "Authorization";
     const scheme = authConfig.scheme ?? "Bearer";
     return {
