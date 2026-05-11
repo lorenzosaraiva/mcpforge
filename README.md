@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/lorenzosaraiva-mcpforge-badge.png)](https://mseep.ai/app/lorenzosaraiva-mcpforge)
+
 # MCPForge
 
 Generate MCP servers from OpenAPI specs or docs pages, then verify generated request compatibility before you publish or install them.
