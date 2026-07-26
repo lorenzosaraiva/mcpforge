@@ -448,6 +448,20 @@ function compareRequestBody(
     });
   }
 
+  const oldContentTypes = (resolvedOldBody.contentTypes ?? [{ contentType: resolvedOldBody.contentType, schema: resolvedOldBody.schema }])
+    .map((entry) => entry.contentType).sort();
+  const newContentTypes = (resolvedNewBody.contentTypes ?? [{ contentType: resolvedNewBody.contentType, schema: resolvedNewBody.schema }])
+    .map((entry) => entry.contentType).sort();
+  if (stableStringify(oldContentTypes) !== stableStringify(newContentTypes)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: oldContentTypes.some((value) => !newContentTypes.includes(value)) ? "high" : "low",
+      details: "Supported request content types changed.",
+      before: oldContentTypes.join(", "),
+      after: newContentTypes.join(", "),
+    });
+  }
+
   if (resolvedOldBody.required !== resolvedNewBody.required) {
     addChange(changes, {
       ...toolMeta,
@@ -591,6 +605,22 @@ function compareToolPair(pair: MatchedToolPair): DiffChange[] {
       details: "HTTP method changed.",
       before: oldTool.method,
       after: newTool.method,
+    });
+  }
+
+  if ((oldTool.baseUrl ?? "") !== (newTool.baseUrl ?? "")) {
+    addChange(changes, {
+      risk: "high", type: "modified", toolName: newTool.name, path: newTool.path, method: newTool.method,
+      details: "Operation server URL changed.", before: oldTool.baseUrl ?? "(global)", after: newTool.baseUrl ?? "(global)",
+    });
+  }
+
+  if (stableStringify(oldTool.securityRequirements ?? []) !== stableStringify(newTool.securityRequirements ?? [])) {
+    addChange(changes, {
+      risk: "high", type: "modified", toolName: newTool.name, path: newTool.path, method: newTool.method,
+      details: "Operation security requirements changed.",
+      before: stableStringify(oldTool.securityRequirements ?? []),
+      after: stableStringify(newTool.securityRequirements ?? []),
     });
   }
 
@@ -780,6 +810,14 @@ export function diffIR(oldIR: MCPForgeIR, newIR: MCPForgeIR): DiffResult {
   const modifiedTools = new Set<string>();
 
   changes.push(...compareAuth(oldIR.auth, newIR.auth));
+  if (stableStringify(oldIR.securitySchemes ?? {}) !== stableStringify(newIR.securitySchemes ?? {})) {
+    addChange(changes, {
+      risk: "high", type: "modified", toolName: "auth", path: "(global)", method: "AUTH",
+      details: "Authentication scheme definitions changed.",
+      before: stableStringify(oldIR.securitySchemes ?? {}),
+      after: stableStringify(newIR.securitySchemes ?? {}),
+    });
+  }
 
   const { matchedPairs, unmatchedOldIndexes, unmatchedNewIndexes } = matchTools(
     oldIR.tools,

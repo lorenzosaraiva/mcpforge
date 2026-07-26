@@ -21,6 +21,7 @@ interface PreparedEndpointRuntime {
   operationId?: string;
   method: string;
   path: string;
+  baseUrl?: string;
   pathParams: Array<{ name: string; token: string }>;
   hasPathParams: boolean;
   queryParams: Array<{ name: string; required: boolean }>;
@@ -30,6 +31,10 @@ interface PreparedEndpointRuntime {
   hasRequestBody: boolean;
   requestBodyRequired: boolean;
   requestBodyContentType: string;
+  requestBodyContentTypes: string[];
+  securityRequirements: Array<{
+    schemes: Array<{ scheme: string; scopes: string[] }>;
+  }>;
 }
 
 interface PreparedPublicToolBase {
@@ -145,6 +150,14 @@ function toEndpointInputSchema(tool: EndpointToolDefinition): Record<string, unk
 
   if (tool.requestBody) {
     properties.body = toJsonSchema(tool.requestBody.schema);
+    if ((tool.requestBody.contentTypes?.length ?? 0) > 1) {
+      properties.__contentType = {
+        type: "string",
+        description: "Select one of the request media types declared by the OpenAPI operation.",
+        enum: tool.requestBody.contentTypes?.map((entry) => entry.contentType),
+        default: tool.requestBody.contentType,
+      };
+    }
     if (tool.requestBody.required) {
       required.push("body");
     }
@@ -163,7 +176,10 @@ function toEndpointInputSchema(tool: EndpointToolDefinition): Record<string, unk
   return JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
 }
 
-function toPreparedEndpointRuntime(tool: EndpointToolDefinition): PreparedEndpointRuntime {
+function toPreparedEndpointRuntime(
+  tool: EndpointToolDefinition,
+  fallbackSecurityRequirements: MCPForgeIR["defaultSecurityRequirements"],
+): PreparedEndpointRuntime {
   const pathParams = tool.parameters
     .filter((param) => param.location === "path")
     .map((param) => ({ name: param.name, token: `{${param.name}}` }));
@@ -179,6 +195,7 @@ function toPreparedEndpointRuntime(tool: EndpointToolDefinition): PreparedEndpoi
     operationId: tool.originalOperationId,
     method: tool.method.toUpperCase(),
     path: tool.path,
+    baseUrl: tool.baseUrl,
     pathParams,
     hasPathParams: pathParams.length > 0,
     queryParams,
@@ -188,6 +205,10 @@ function toPreparedEndpointRuntime(tool: EndpointToolDefinition): PreparedEndpoi
     hasRequestBody: Boolean(tool.requestBody),
     requestBodyRequired: tool.requestBody?.required === true,
     requestBodyContentType: tool.requestBody?.contentType ?? "application/json",
+    requestBodyContentTypes:
+      tool.requestBody?.contentTypes?.map((entry) => entry.contentType) ??
+      [tool.requestBody?.contentType ?? "application/json"],
+    securityRequirements: tool.securityRequirements ?? fallbackSecurityRequirements ?? [],
   };
 }
 
@@ -225,6 +246,7 @@ function resolveEndpointMap(ir: MCPForgeIR, sourceIR?: MCPForgeIR): Map<string, 
 function prepareWorkflowSteps(
   workflow: WorkflowToolDefinition,
   endpointMap: Map<string, EndpointToolDefinition>,
+  fallbackSecurityRequirements: MCPForgeIR["defaultSecurityRequirements"],
 ): PreparedWorkflowStep[] {
   return workflow.steps.map((step: WorkflowStepDefinition) => {
     const endpointTool = endpointMap.get(step.operationId);
@@ -238,20 +260,25 @@ function prepareWorkflowSteps(
       id: step.id,
       saveAs: step.saveAs,
       args: step.args,
-      endpoint: toPreparedEndpointRuntime(endpointTool),
+      endpoint: toPreparedEndpointRuntime(endpointTool, fallbackSecurityRequirements),
     };
   });
 }
 
 function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPublicTool[] {
   const endpointMap = resolveEndpointMap(ir, sourceIR);
+  const legacySecurityRequirements =
+    !ir.securitySchemes && ir.auth.type !== "none"
+      ? [{ schemes: [{ scheme: "legacy", scopes: ir.auth.scopes ?? [] }] }]
+      : undefined;
+  const fallbackSecurityRequirements = ir.defaultSecurityRequirements ?? legacySecurityRequirements;
 
   return ir.tools.map((tool) => {
     if (isEndpointTool(tool)) {
       return {
         ...createPreparedToolBase(tool, toEndpointInputSchema(tool)),
         kind: "endpoint",
-        endpoint: toPreparedEndpointRuntime(tool),
+        endpoint: toPreparedEndpointRuntime(tool, fallbackSecurityRequirements),
       };
     }
 
@@ -259,7 +286,7 @@ function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPubl
     return {
       ...createPreparedToolBase(tool, workflowInputSchema),
       kind: "workflow",
-      steps: prepareWorkflowSteps(tool, endpointMap),
+      steps: prepareWorkflowSteps(tool, endpointMap, fallbackSecurityRequirements),
       output: tool.output,
       hasOutput: tool.output !== undefined,
     };
@@ -306,7 +333,9 @@ export async function generateTypeScriptMCPServer(
 
   const projectName = options.projectName ?? `mcp-server-${toKebabCase(ir.apiName)}`;
   const preparedTools = preparePublicTools(ir, options.sourceIR);
-  const hasAuth = ir.auth.type !== "none";
+  const securitySchemes =
+    ir.securitySchemes ?? (ir.auth.type !== "none" ? { legacy: ir.auth } : {});
+  const hasAuth = Object.keys(securitySchemes).length > 0;
   const authRequired = hasAuth && ir.auth.required === true;
   await removeStaleToolFiles(
     toolsDir,
@@ -318,6 +347,7 @@ export async function generateTypeScriptMCPServer(
     apiDescription: ir.apiDescription,
     baseUrl: ir.baseUrl,
     auth: ir.auth,
+    securitySchemes,
     hasAuth,
     authRequired,
     authOptional: hasAuth && !authRequired,

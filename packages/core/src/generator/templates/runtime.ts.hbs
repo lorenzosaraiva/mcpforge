@@ -8,7 +8,16 @@ export interface AuthState {
 
 export interface ToolHandlerContext {
   baseUrl: string;
-  auth: AuthState;
+  forceBaseUrl?: boolean;
+  auth?: AuthState;
+  resolveAuth?: (
+    requirements: SecurityRequirement[],
+    endpointName: string,
+  ) => Promise<AuthState>;
+}
+
+export interface SecurityRequirement {
+  schemes: Array<{ scheme: string; scopes: string[] }>;
 }
 
 export interface EndpointRuntimeDefinition {
@@ -16,6 +25,7 @@ export interface EndpointRuntimeDefinition {
   operationId?: string;
   method: string;
   path: string;
+  baseUrl?: string;
   pathParams: Array<{ name: string; token: string }>;
   hasPathParams: boolean;
   queryParams: Array<{ name: string; required: boolean }>;
@@ -25,6 +35,8 @@ export interface EndpointRuntimeDefinition {
   hasRequestBody: boolean;
   requestBodyRequired: boolean;
   requestBodyContentType: string;
+  requestBodyContentTypes?: string[];
+  securityRequirements?: SecurityRequirement[];
 }
 
 interface SerializedRequestBody {
@@ -70,6 +82,12 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
+function toOwnedArrayBuffer(value: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(value);
+  return copy.buffer;
+}
+
 function toBlobValue(
   value: unknown,
 ): {
@@ -86,7 +104,7 @@ function toBlobValue(
 
   if (ArrayBuffer.isView(value)) {
     return {
-      blob: new Blob([value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)]),
+      blob: new Blob([toOwnedArrayBuffer(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))]),
     };
   }
 
@@ -94,14 +112,18 @@ function toBlobValue(
     const contentType = typeof value.contentType === "string" ? value.contentType : undefined;
     if (typeof value.base64 === "string") {
       return {
-        blob: new Blob([decodeBase64(value.base64)], contentType ? { type: contentType } : undefined),
+        blob: new Blob([toOwnedArrayBuffer(decodeBase64(value.base64))], contentType ? { type: contentType } : undefined),
         filename: typeof value.filename === "string" ? value.filename : undefined,
       };
     }
 
+    const descriptorContent = value.content;
+    if (typeof descriptorContent !== "string") {
+      throw new Error("Binary descriptor content must be a string.");
+    }
     const encoding = typeof value.encoding === "string" ? value.encoding.toLowerCase() : "utf8";
     const content =
-      encoding === "base64" ? decodeBase64(value.content) : value.content;
+      encoding === "base64" ? toOwnedArrayBuffer(decodeBase64(descriptorContent)) : descriptorContent;
     return {
       blob: new Blob([content], contentType ? { type: contentType } : undefined),
       filename: typeof value.filename === "string" ? value.filename : undefined,
@@ -465,8 +487,10 @@ export async function invokeEndpoint(
     resolvedPath = resolvedPath.split(param.token).join(encodeURIComponent(String(value)));
   }
 
-  const url = buildUrl(context.baseUrl, resolvedPath);
-  const requestAuth = await resolveRequestAuth(context.auth);
+  const url = buildUrl(context.forceBaseUrl ? context.baseUrl : (endpoint.baseUrl ?? context.baseUrl), resolvedPath);
+  const requestAuth = context.resolveAuth
+    ? await context.resolveAuth(endpoint.securityRequirements ?? [], endpoint.name)
+    : await resolveRequestAuth(context.auth ?? { headers: {}, queryParams: {} });
 
   for (const param of endpoint.queryParams) {
     const value = input[param.name];
@@ -511,7 +535,11 @@ export async function invokeEndpoint(
 
   let requestBody: BodyInit | undefined;
   if (bodyInput !== undefined && bodyInput !== null) {
-    const serializedBody = serializeRequestBody(endpoint.requestBodyContentType, bodyInput);
+    const requestedContentType = typeof input.__contentType === "string" ? input.__contentType : undefined;
+    if (requestedContentType && !(endpoint.requestBodyContentTypes ?? []).includes(requestedContentType)) {
+      throw new Error(`Unsupported request content type "${requestedContentType}" for ${endpoint.name}.`);
+    }
+    const serializedBody = serializeRequestBody(requestedContentType ?? endpoint.requestBodyContentType, bodyInput);
     requestBody = serializedBody.body;
 
     if (serializedBody.removeContentTypeHeader) {

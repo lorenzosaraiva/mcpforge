@@ -454,8 +454,33 @@ async function optimizeSingleIR(
     if (validated.rawEndpointCount <= 0) {
       validated.rawEndpointCount = ir.rawEndpointCount;
     }
-    validated.tools = capTools(validated.tools, maxTools);
-    return validated;
+    const sourceByOperation = new Map(
+      ir.tools
+        .filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool))
+        .map((tool) => [tool.originalOperationId ?? tool.name, tool]),
+    );
+    const rehydratedTools = validated.tools.flatMap((optimizedTool) => {
+      const sourceTool = sourceByOperation.get(
+        optimizedTool.originalOperationId ?? optimizedTool.name,
+      );
+      if (!sourceTool) {
+        return [];
+      }
+      return [{
+        ...sourceTool,
+        name: optimizedTool.name,
+        description: optimizedTool.description,
+        tags: optimizedTool.tags.length > 0 ? optimizedTool.tags : sourceTool.tags,
+        priority: optimizedTool.priority,
+      }];
+    });
+    return {
+      ...ir,
+      apiName: validated.apiName,
+      apiDescription: validated.apiDescription,
+      tools: capTools(rehydratedTools, maxTools),
+      rawEndpointCount: ir.rawEndpointCount,
+    };
   }
 
   throw new Error("Failed to obtain a valid optimizer response.");

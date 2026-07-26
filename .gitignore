@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 *.log
+.tmp-*
+*.tgz
 .env
 .env.*
 !.env.example

@@ -8,6 +8,7 @@ import type { RegistryIndex, RegistryIndexEntry } from "../core.js";
 import { runGitHubLoginFlow } from "./auth.js";
 import { type LoadedMCPForgeConfig, type MCPForgeConfig, loadConfig, writeConfigFile } from "../utils/config.js";
 import { type MCPForgeCredentials, loadCredentials } from "../utils/credentials.js";
+import { getAllToolSelectionValues } from "../utils/tool-selection.js";
 import {
   createGitHubBranch,
   createGitHubFork,
@@ -125,6 +126,7 @@ function buildRegistryEntryPayload(
           mode: config.verification.mode,
           verifiedAt: config.verification.verifiedAt,
           compatibilityVersion: config.verification.compatibilityVersion,
+          finalIRHash: config.verification.finalIRHash,
           toolCount: config.verification.toolCount,
           passedToolCount: config.verification.passedToolCount,
           skippedToolCount: config.verification.skippedToolCount,
@@ -196,6 +198,27 @@ export function validatePublishConfig(config: LoadedMCPForgeConfig): {
   if (config.selectedTools.length === 0) {
     warnings.push("selectedTools is empty.");
     errors.push("Publish aborted because no tools are selected.");
+  }
+
+  const actualSelections = new Set(getAllToolSelectionValues(config.ir));
+  const unknownSelections = config.selectedTools.filter((value) => !actualSelections.has(value));
+  if (unknownSelections.length > 0) {
+    errors.push(`Publish aborted because selectedTools contains unknown tools: ${unknownSelections.join(", ")}.`);
+  }
+
+  if (config.verification) {
+    const expectedCount = config.ir.tools.length;
+    const reportedCount = config.verification.toolCount;
+    const resultCount =
+      (config.verification.passedToolCount ?? 0) +
+      (config.verification.skippedToolCount ?? 0) +
+      (config.verification.failedToolCount ?? 0);
+    if (reportedCount !== undefined && reportedCount !== expectedCount) {
+      errors.push(`Publish aborted because verification toolCount ${reportedCount} does not match IR tool count ${expectedCount}.`);
+    }
+    if (reportedCount !== undefined && resultCount !== reportedCount) {
+      errors.push(`Publish aborted because verification result counts total ${resultCount}, expected ${reportedCount}.`);
+    }
   }
 
   if (isLocalhostUrl(config.ir.baseUrl)) {

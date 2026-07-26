@@ -6,6 +6,7 @@ import type {
   MCPForgeIR,
   OAuthFlowConfig,
   RequestBodyDef,
+  SecurityRequirement,
   ToolParameter,
 } from "./types.js";
 import { inferSchemaType, toJsonSchema, toSnakeCase, truncateText } from "../utils/schema-utils.js";
@@ -49,6 +50,17 @@ function normalizeServerUrl(rawUrl: string): string {
   return url;
 }
 
+function resolveServerObjectUrl(server: unknown): string | undefined {
+  const record = asRecord(server);
+  if (typeof record.url !== "string" || !record.url.trim()) return undefined;
+  const variables = asRecord(record.variables);
+  const expanded = record.url.replace(/\{([^}]+)\}/g, (token, name: string) => {
+    const variable = asRecord(variables[name]);
+    return variable.default === undefined ? token : String(variable.default);
+  });
+  return normalizeServerUrl(expanded);
+}
+
 function resolveSwagger2BaseUrl(document: OpenAPIDocument): string | undefined {
   const host = typeof document.host === "string" ? document.host.trim() : "";
   if (!host) {
@@ -70,10 +82,8 @@ function resolveSwagger2BaseUrl(document: OpenAPIDocument): string | undefined {
 function resolveBaseUrl(document: OpenAPIDocument): string {
   const servers = Array.isArray(document.servers) ? document.servers : [];
   for (const server of servers) {
-    const serverRecord = asRecord(server);
-    if (typeof serverRecord.url === "string" && serverRecord.url.trim()) {
-      return normalizeServerUrl(serverRecord.url);
-    }
+    const resolved = resolveServerObjectUrl(server);
+    if (resolved) return resolved;
   }
 
   const swagger2BaseUrl = resolveSwagger2BaseUrl(document);
@@ -263,6 +273,10 @@ function mapRequestBody(
     const mediaType = asRecord(content[preferredType]);
     return {
       contentType: preferredType,
+      contentTypes: contentTypes.map((contentType) => ({
+        contentType,
+        schema: toJsonSchema(asRecord(content[contentType]).schema),
+      })),
       schema: toJsonSchema(mediaType.schema),
       required: requestBody.required === true,
       description:
@@ -337,6 +351,40 @@ function pickSecuritySchemeName(
   }
 
   return undefined;
+}
+
+function parseSecurityRequirements(
+  security: unknown,
+  schemes: Record<string, unknown>,
+): SecurityRequirement[] {
+  if (!Array.isArray(security)) {
+    return [];
+  }
+
+  const requirements: SecurityRequirement[] = [];
+  for (const candidate of security) {
+    const requirementObject = asRecord(candidate);
+    const requirementSchemes = Object.entries(requirementObject)
+      .map(([name, scopes]) => ({
+        scheme: name,
+        scopes: asStringArray(scopes),
+      }));
+    if (requirementSchemes.length > 0 || Object.keys(requirementObject).length === 0) {
+      requirements.push({ schemes: requirementSchemes });
+    }
+  }
+  return requirements;
+}
+
+function resolveOperationSecurityRequirements(
+  document: OpenAPIDocument,
+  operation: OpenAPIOperation,
+): SecurityRequirement[] {
+  const schemes = resolveSecuritySchemes(document);
+  const effectiveSecurity = Object.hasOwn(operation, "security")
+    ? operation.security
+    : document.security;
+  return parseSecurityRequirements(effectiveSecurity, schemes);
 }
 
 function collectOperationSecurityArrays(document: OpenAPIDocument): unknown[] {
@@ -574,6 +622,36 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   };
 }
 
+function detectSecuritySchemes(document: OpenAPIDocument): Record<string, AuthConfig> {
+  const schemes = resolveSecuritySchemes(document);
+  const result: Record<string, AuthConfig> = {};
+
+  for (const name of Object.keys(schemes)) {
+    const scopedDocument: OpenAPIDocument = {
+      ...document,
+      security: [{ [name]: [] }],
+      paths: {},
+      components: { securitySchemes: { [name]: schemes[name] } },
+      securityDefinitions: { [name]: schemes[name] },
+    };
+    const config = detectAuthConfig(scopedDocument);
+    const normalizedName = name
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .replace(/[^a-zA-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .toUpperCase();
+    result[name] = {
+      ...config,
+      envVarName:
+        config.type === "oauth2"
+          ? `${normalizedName || "OAUTH"}_ACCESS_TOKEN`
+          : `${normalizedName || "AUTH"}_CREDENTIAL`,
+    };
+  }
+
+  return result;
+}
+
 function convertOperationToTool(
   document: OpenAPIDocument,
   method: string,
@@ -604,11 +682,15 @@ function convertOperationToTool(
     description: resolvedDescription,
     method: method.toUpperCase(),
     path,
+    baseUrl:
+      (Array.isArray(operation.servers) ? operation.servers.map(resolveServerObjectUrl).find(Boolean) : undefined) ??
+      (Array.isArray(pathItem.servers) ? pathItem.servers.map(resolveServerObjectUrl).find(Boolean) : undefined),
     parameters: mappedParameters,
     requestBody: mapRequestBody(document, operation, mergedParameters),
     responseDescription: resolveResponseDescription(operation),
     tags: asStringArray(operation.tags),
     originalOperationId: operationId,
+    securityRequirements: resolveOperationSecurityRequirements(document, operation),
   };
 
   return tool;
@@ -638,10 +720,16 @@ export async function parseOpenAPISpec(specSource: string): Promise<MCPForgeIR> 
     }
 
     return {
+      irVersion: 2,
       apiName: resolveApiName(dereferenced),
       apiDescription: resolveApiDescription(dereferenced),
       baseUrl: resolveBaseUrl(dereferenced),
       auth: detectAuthConfig(dereferenced),
+      securitySchemes: detectSecuritySchemes(dereferenced),
+      defaultSecurityRequirements: parseSecurityRequirements(
+        dereferenced.security,
+        resolveSecuritySchemes(dereferenced),
+      ),
       tools,
       rawEndpointCount,
     };

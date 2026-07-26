@@ -8,7 +8,8 @@ export {
   parseOpenAPISpec,
   planWorkflowTools,
   scrapeDocsFromUrl,
-} from "../../core/src/index.js";
+  truncateText,
+} from "@mcpforge/core";
 
 export type {
   DiffChange,
@@ -23,4 +24,4 @@ export type {
   ScrapedDocPage,
   ToolDefinition,
   WorkflowToolDefinition,
-} from "../../core/src/index.js";
+} from "@mcpforge/core";

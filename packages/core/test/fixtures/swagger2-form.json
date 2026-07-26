@@ -1,0 +1,19 @@
+{
+  "swagger": "2.0",
+  "info": { "title": "Swagger Form Fixture", "version": "1.0.0" },
+  "schemes": ["https"],
+  "host": "upload.example.com",
+  "basePath": "/v2",
+  "consumes": ["multipart/form-data"],
+  "paths": {
+    "/assets": {
+      "post": {
+        "parameters": [
+          { "name": "file", "in": "formData", "required": true, "type": "file" },
+          { "name": "label", "in": "formData", "type": "string" }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

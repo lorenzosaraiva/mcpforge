@@ -14,7 +14,7 @@ Workflow tools are deterministic task wrappers that execute one or more upstream
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm 9+
 
 ## Setup
@@ -79,8 +79,10 @@ Add this to your Claude Desktop MCP config file and replace the absolute path:
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/{{projectName}}/dist/index.js"],
       "env": {
-        "API_BASE_URL": "{{baseUrl}}"{{#unless (eq auth.type "none")}},
-        "{{auth.envVarName}}": "replace-me"{{/unless}}
+        "API_BASE_URL": "{{baseUrl}}"{{#if hasAuth}},{{/if}}
+{{#each securitySchemes}}
+        "{{this.envVarName}}": "replace-me"{{#unless @last}},{{/unless}}
+{{/each}}
       }
     }
   }
@@ -98,8 +100,10 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/{{projectName}}/dist/index.js"],
       "env": {
-        "API_BASE_URL": "{{baseUrl}}"{{#unless (eq auth.type "none")}},
-        "{{auth.envVarName}}": "replace-me"{{/unless}}
+        "API_BASE_URL": "{{baseUrl}}"{{#if hasAuth}},{{/if}}
+{{#each securitySchemes}}
+        "{{this.envVarName}}": "replace-me"{{#unless @last}},{{/unless}}
+{{/each}}
       }
     }
   }
@@ -120,7 +124,7 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
 
 ## Supported Compatibility Matrix
 
-- Auth: header/query/cookie API keys, bearer tokens, basic auth, OAuth client credentials, and OAuth refresh-token renewal.
+- Auth: operation-specific public overrides, OR alternatives, AND-combined schemes, header/query/cookie API keys, bearer tokens, basic auth, OAuth client credentials, and OAuth refresh-token renewal.
 - Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible bodies.
 - Verification: `npx mcpforge test` validates generated request construction against a local mock upstream before you switch to live calls.
 - OAuth notes: browser-based authorization-code login is not generated. Use an existing refresh token, a client-credentials app, or a ready-to-use access token in `ACCESS_TOKEN`.
@@ -129,7 +133,7 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
 
 - Authentication errors (`401` / `403`):
 {{#if hasAuth}}
-  - Verify `.env` contains `{{auth.envVarName}}` and the value format is correct.
+  - Verify `.env` contains the credential variable named for each required security scheme and that its value format is correct.
 {{else}}
   - This API was detected as unauthenticated. Verify the upstream service really does not require credentials in your environment.
 {{/if}}

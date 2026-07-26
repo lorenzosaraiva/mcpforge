@@ -8,7 +8,8 @@ import { z } from "zod";
 import type { MCPForgeIR, ScrapedDocPage } from "../core.js";
 import { getAllToolSelectionValues } from "./tool-selection.js";
 
-export const CURRENT_COMPATIBILITY_VERSION = "1";
+export const CURRENT_CONFIG_VERSION = 2;
+export const CURRENT_COMPATIBILITY_VERSION = "2";
 
 const VerificationSchema = z.object({
   status: z.enum(["passed", "failed"]),
@@ -25,6 +26,7 @@ const VerificationSchema = z.object({
 const ConfigSchema = z
   .object({
     specSource: z.string(),
+    configVersion: z.number().int().positive().optional(),
     sourceType: z.enum(["openapi", "docs-url"]).optional(),
     apiName: z.string().optional(),
     outputDir: z.string().optional(),
@@ -67,6 +69,7 @@ export interface VerificationMetadata {
 export type VerificationState = "verified" | "failed" | "stale" | "unverified";
 
 export interface MCPForgeConfig {
+  configVersion?: number;
   specSource: string;
   sourceType: "openapi" | "docs-url";
   apiName: string;
@@ -93,6 +96,29 @@ export interface LoadedMCPForgeConfig extends MCPForgeConfig {
   hasWorkflowIR: boolean;
   verificationState: VerificationState;
   expectedFinalIRHash: string;
+}
+
+function migrateIR(input: MCPForgeIR): MCPForgeIR {
+  if (input.irVersion === 2 && input.securitySchemes) {
+    return input;
+  }
+
+  const legacyRequirements =
+    input.auth.type === "none"
+      ? []
+      : [{ schemes: [{ scheme: "legacy", scopes: input.auth.scopes ?? [] }] }];
+  return {
+    ...input,
+    irVersion: 2,
+    securitySchemes:
+      input.securitySchemes ?? (input.auth.type === "none" ? {} : { legacy: input.auth }),
+    defaultSecurityRequirements: input.defaultSecurityRequirements ?? legacyRequirements,
+    tools: input.tools.map((tool) =>
+      tool.kind === "endpoint" && tool.securityRequirements === undefined
+        ? { ...tool, securityRequirements: legacyRequirements }
+        : tool,
+    ),
+  };
 }
 
 function toKebabCase(value: string): string {
@@ -201,24 +227,28 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     throw new Error(`Invalid mcpforge.config.json: ${message}`);
   }
 
-  const ir = parsedConfig.ir as MCPForgeIR;
+  const ir = migrateIR(parsedConfig.ir as MCPForgeIR);
   const configDir = dirname(configPath);
   const sourceType = parsedConfig.sourceType ?? "openapi";
   const outputDir = parsedConfig.outputDir ?? ".";
   const hasSourceIR = parsedConfig.sourceIR !== undefined;
   const hasOptimizedIR = parsedConfig.optimizedIR !== undefined;
   const hasWorkflowIR = parsedConfig.workflowIR !== undefined;
-  const sourceIR = (parsedConfig.sourceIR as MCPForgeIR | undefined) ?? ir;
+  const sourceIR = parsedConfig.sourceIR
+    ? migrateIR(parsedConfig.sourceIR as MCPForgeIR)
+    : ir;
   const optimizedIR =
-    (parsedConfig.optimizedIR as MCPForgeIR | undefined) ?? (parsedConfig.optimized ? ir : undefined);
+    (parsedConfig.optimizedIR ? migrateIR(parsedConfig.optimizedIR as MCPForgeIR) : undefined) ??
+    (parsedConfig.optimized ? ir : undefined);
   const workflowIR =
-    (parsedConfig.workflowIR as MCPForgeIR | undefined) ??
+    (parsedConfig.workflowIR ? migrateIR(parsedConfig.workflowIR as MCPForgeIR) : undefined) ??
     (parsedConfig.workflowEnabled ? ir : undefined);
   const selectedTools = parsedConfig.selectedTools ?? getAllToolSelectionValues(ir);
   const verification = parsedConfig.verification as VerificationMetadata | undefined;
   const expectedFinalIRHash = computeIRHash(ir);
 
   return {
+    configVersion: CURRENT_CONFIG_VERSION,
     specSource: resolveSpecSourceForRuntime(parsedConfig.specSource, sourceType, outputDir, configDir),
     sourceType,
     apiName: resolveApiName(parsedConfig.apiName, ir),
@@ -246,5 +276,9 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
 }
 
 export async function writeConfigFile(configPath: string, config: MCPForgeConfig): Promise<void> {
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await writeFile(
+    configPath,
+    `${JSON.stringify({ ...config, configVersion: CURRENT_CONFIG_VERSION }, null, 2)}\n`,
+    "utf8",
+  );
 }

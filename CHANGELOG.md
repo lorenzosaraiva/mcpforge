@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.1.0 (2026-07-26)
+
+- Preserved operation-specific OpenAPI security, including public overrides, OR alternatives, AND-combined schemes, and operation scopes.
+- Added IR/config version 2 migration and invalidated verification produced by the earlier compatibility model.
+- Added registry integrity and release metadata validation plus packed-artifact end-to-end verification.
+- Upgraded runtime dependencies, added coverage reporting, synchronized package versions, and formalized the public core package boundary.
+- Added Node 20+ support metadata and expanded CI across Windows and Linux on Node 20 and 22.
+
 - Added OAuth 2.0 token lifecycle support for generated servers, including static access tokens, client credentials, refresh-token renewal, and mock token endpoint coverage in `mcpforge test`.
 - Added generated-runtime support for header/query/cookie API keys plus content-type-aware request serialization for JSON, urlencoded, multipart, text, and binary payloads.
 - Added compatibility verification metadata to `mcpforge.config.json`, including IR hashing and freshness checks.

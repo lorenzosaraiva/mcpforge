@@ -7,12 +7,13 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   isEndpointTool,
   isWorkflowTool,
+  truncateText,
   type AuthConfig,
   type EndpointToolDefinition,
   type MCPForgeIR,
+  type SecurityRequirement,
   type ToolDefinition,
 } from "../core.js";
-import { truncateText } from "../../../core/src/utils/schema-utils.js";
 import { buildCompatibilityInvocationArgs, type ToolTestResult } from "./test-runner.js";
 
 type CallToolResponse = Awaited<ReturnType<Client["callTool"]>>;
@@ -526,6 +527,58 @@ function applyAuth(auth: AuthConfig): AppliedAuth {
   };
 }
 
+function mergeAppliedAuth(states: AppliedAuth[]): AppliedAuth {
+  const merged: AppliedAuth = { env: {}, headers: {}, queryParams: {} };
+  for (const state of states) {
+    Object.assign(merged.env, state.env);
+    Object.assign(merged.queryParams, state.queryParams);
+    for (const [name, value] of Object.entries(state.headers)) {
+      const existingKey = Object.keys(merged.headers).find(
+        (key) => key.toLowerCase() === name.toLowerCase(),
+      );
+      if (name.toLowerCase() === "cookie" && existingKey) {
+        merged.headers[existingKey] = `${merged.headers[existingKey]}; ${value}`;
+      } else {
+        merged.headers[existingKey ?? name] = value;
+      }
+    }
+  }
+  return merged;
+}
+
+function getSecuritySchemes(ir: MCPForgeIR): Record<string, AuthConfig> {
+  return ir.securitySchemes ?? (ir.auth.type !== "none" ? { legacy: ir.auth } : {});
+}
+
+function getEffectiveRequirements(
+  tool: EndpointToolDefinition,
+  ir: MCPForgeIR,
+): SecurityRequirement[] {
+  if (tool.securityRequirements) {
+    return tool.securityRequirements;
+  }
+  if (ir.defaultSecurityRequirements) {
+    return ir.defaultSecurityRequirements;
+  }
+  return ir.auth.type === "none"
+    ? []
+    : [{ schemes: [{ scheme: "legacy", scopes: ir.auth.scopes ?? [] }] }];
+}
+
+function applyEndpointAuth(tool: EndpointToolDefinition, ir: MCPForgeIR): AppliedAuth {
+  const requirements = getEffectiveRequirements(tool, ir);
+  if (requirements.length === 0) {
+    return { env: {}, headers: {}, queryParams: {} };
+  }
+  const schemes = getSecuritySchemes(ir);
+  const alternative = requirements[0];
+  return mergeAppliedAuth(
+    (alternative?.schemes ?? []).map((reference) =>
+      applyAuth(schemes[reference.scheme] ?? { type: "none", envVarName: "NO_AUTH" }),
+    ),
+  );
+}
+
 function buildEndpointExpectation(
   tool: EndpointToolDefinition,
   args: Record<string, unknown>,
@@ -548,7 +601,6 @@ function buildWorkflowExpectations(
   tool: Extract<ToolDefinition, { kind: "workflow" }>,
   args: Record<string, unknown>,
   sourceIR: MCPForgeIR,
-  auth: AppliedAuth,
 ): RequestExpectation[] {
   const endpointMap = createEndpointMap(sourceIR);
   const stepResults: Record<string, unknown> = {};
@@ -562,7 +614,7 @@ function buildWorkflowExpectations(
 
     const resolvedArgs = resolveWorkflowValue(step.args, args, stepResults);
     const endpointArgs = isRecord(resolvedArgs) ? resolvedArgs : {};
-    const expectation = buildEndpointExpectation(endpointTool, endpointArgs, auth);
+    const expectation = buildEndpointExpectation(endpointTool, endpointArgs, applyEndpointAuth(endpointTool, sourceIR));
     expectation.label = `${tool.name}:${step.id}`;
     expectation.responseBody = buildResponseBody(expectation);
     expectations.push(expectation);
@@ -584,14 +636,12 @@ function buildExpectations(
   tool: ToolDefinition,
   args: Record<string, unknown>,
   sourceIR: MCPForgeIR,
-  authConfig: AuthConfig,
 ): RequestExpectation[] {
-  const auth = applyAuth(authConfig);
   if (isEndpointTool(tool)) {
-    return [buildEndpointExpectation(tool, args, auth)];
+    return [buildEndpointExpectation(tool, args, applyEndpointAuth(tool, sourceIR))];
   }
 
-  return buildWorkflowExpectations(tool, args, sourceIR, auth);
+  return buildWorkflowExpectations(tool, args, sourceIR);
 }
 
 function parseHeaders(headers: IncomingMessage["headers"]): Record<string, string> {
@@ -783,7 +833,7 @@ class HarnessImpl implements CompatibilityHarness {
     await this.handleRequest(request, response);
   });
 
-  async start(auth: AuthConfig): Promise<void> {
+  async start(ir: MCPForgeIR): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       this.server.once("error", reject);
       this.server.listen(0, "127.0.0.1", () => {
@@ -795,7 +845,7 @@ class HarnessImpl implements CompatibilityHarness {
     const address = this.server.address() as AddressInfo;
     this.baseUrl = `http://127.0.0.1:${address.port}`;
 
-    const authState = applyAuth(auth);
+    const authState = mergeAppliedAuth(Object.values(getSecuritySchemes(ir)).map(applyAuth));
     this.env = {
       API_BASE_URL: this.baseUrl,
       ...authState.env,
@@ -807,7 +857,7 @@ class HarnessImpl implements CompatibilityHarness {
   }
 
   prepare(tool: ToolDefinition, args: Record<string, unknown>, sourceIR: MCPForgeIR): void {
-    this.state.expectations = buildExpectations(tool, args, sourceIR, sourceIR.auth);
+    this.state.expectations = buildExpectations(tool, args, sourceIR);
     this.state.failure = undefined;
   }
 
@@ -904,9 +954,20 @@ class HarnessImpl implements CompatibilityHarness {
   }
 }
 
-export async function createCompatibilityHarness(auth: AuthConfig): Promise<CompatibilityHarness> {
+export async function createCompatibilityHarness(input: AuthConfig | MCPForgeIR): Promise<CompatibilityHarness> {
   const harness = new HarnessImpl();
-  await harness.start(auth);
+  const ir: MCPForgeIR = "tools" in input
+    ? input
+    : {
+        irVersion: 1,
+        apiName: "Compatibility API",
+        apiDescription: "Compatibility harness",
+        baseUrl: "http://localhost",
+        auth: input,
+        tools: [],
+        rawEndpointCount: 0,
+      };
+  await harness.start(ir);
   return harness;
 }
 

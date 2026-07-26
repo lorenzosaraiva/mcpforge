@@ -159,4 +159,47 @@ describe("parseOpenAPISpec auth detection", () => {
       ],
     });
   });
+
+  it("preserves public overrides, OR alternatives, AND schemes, and operation scopes", async () => {
+    const specPath = await writeSpec({
+      openapi: "3.1.0",
+      info: { title: "Mixed Security", version: "1.0.0" },
+      servers: [{ url: "https://api.example.com" }],
+      components: {
+        securitySchemes: {
+          headerKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+          tenantKey: { type: "apiKey", in: "query", name: "tenant_key" },
+          oauth: {
+            type: "oauth2",
+            flows: { clientCredentials: { tokenUrl: "https://auth.example.com/token", scopes: { read: "Read" } } },
+          },
+        },
+      },
+      security: [{ headerKey: [] }],
+      paths: {
+        "/public": { get: { operationId: "getPublic", security: [], responses: { "200": { description: "ok" } } } },
+        "/alternative": { get: { operationId: "getAlternative", security: [{ headerKey: [] }, { oauth: ["read"] }], responses: { "200": { description: "ok" } } } },
+        "/combined": { get: { operationId: "getCombined", security: [{ headerKey: [], tenantKey: [] }], responses: { "200": { description: "ok" } } } },
+      },
+    });
+
+    const result = await parseOpenAPISpec(specPath);
+    const byId = new Map(
+      result.tools
+        .filter((tool) => tool.kind === "endpoint")
+        .map((tool) => [tool.originalOperationId, tool]),
+    );
+    expect(result.irVersion).toBe(2);
+    expect(Object.keys(result.securitySchemes ?? {})).toEqual(["headerKey", "tenantKey", "oauth"]);
+    expect(byId.get("getPublic")?.securityRequirements).toEqual([]);
+    expect(byId.get("getAlternative")?.securityRequirements).toEqual([
+      { schemes: [{ scheme: "headerKey", scopes: [] }] },
+      { schemes: [{ scheme: "oauth", scopes: ["read"] }] },
+    ]);
+    expect(byId.get("getCombined")?.securityRequirements).toEqual([
+      { schemes: [{ scheme: "headerKey", scopes: [] }, { scheme: "tenantKey", scopes: [] }] },
+    ]);
+    expect(result.securitySchemes?.headerKey?.envVarName).toBe("HEADER_KEY_CREDENTIAL");
+    expect(result.securitySchemes?.tenantKey?.envVarName).toBe("TENANT_KEY_CREDENTIAL");
+  });
 });

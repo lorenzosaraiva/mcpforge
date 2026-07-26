@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { EndpointToolDefinition, MCPForgeIR } from "../parser/types.js";
+import type { AuthConfig, EndpointToolDefinition, MCPForgeIR } from "../parser/types.js";
 import { generateTypeScriptMCPServer } from "./typescript-generator.js";
 
 const tempDirs: string[] = [];
@@ -51,6 +51,11 @@ async function importRuntimeModules(rootDir: string): Promise<{
     context: Record<string, unknown>,
   ) => Promise<unknown>;
   resolveAuthState: (authConfig: Record<string, unknown>) => { auth: Record<string, unknown> };
+  resolveSecurityAuth: (
+    requirements: Array<{ schemes: Array<{ scheme: string; scopes: string[] }> }>,
+    schemes: Record<string, AuthConfig>,
+    endpointName: string,
+  ) => Promise<{ headers: Record<string, string>; queryParams: Record<string, string> }>;
   AUTH_CONFIG: Record<string, unknown>;
 }> {
   await transpileGeneratedModule(rootDir, join("src", "resilience.ts"));
@@ -66,6 +71,7 @@ async function importRuntimeModules(rootDir: string): Promise<{
           queryParams: {},
         },
       }),
+      resolveSecurityAuth: async () => ({ headers: {}, queryParams: {} }),
       AUTH_CONFIG: {
         type: "none",
       },
@@ -77,6 +83,7 @@ async function importRuntimeModules(rootDir: string): Promise<{
   return {
     invokeEndpoint: runtimeModule.invokeEndpoint,
     resolveAuthState: authModule.resolveAuthState,
+    resolveSecurityAuth: authModule.resolveSecurityAuth,
     AUTH_CONFIG: authModule.AUTH_CONFIG,
   };
 }
@@ -93,9 +100,34 @@ afterEach(async () => {
   delete process.env.OAUTH_CLIENT_ID;
   delete process.env.OAUTH_CLIENT_SECRET;
   delete process.env.OAUTH_REFRESH_TOKEN;
+  delete process.env.HEADER_KEY_CREDENTIAL;
+  delete process.env.TENANT_KEY_CREDENTIAL;
 });
 
 describe("generated runtime", () => {
+  it("resolves operation-specific public, alternative, and combined auth", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-runtime-"));
+    tempDirs.push(outputDir);
+    const tool: EndpointToolDefinition = {
+      kind: "endpoint", name: "mixed", description: "Mixed auth", method: "GET", path: "/mixed", parameters: [], tags: [],
+      securityRequirements: [{ schemes: [{ scheme: "headerKey", scopes: [] }, { scheme: "tenantKey", scopes: [] }] }],
+    };
+    const ir = createIR(tool, { type: "api-key", envVarName: "HEADER_KEY_CREDENTIAL", required: true });
+    ir.irVersion = 2;
+    ir.securitySchemes = {
+      headerKey: { type: "api-key", envVarName: "HEADER_KEY_CREDENTIAL", parameterName: "X-API-Key", headerName: "X-API-Key", location: "header", required: true },
+      tenantKey: { type: "api-key", envVarName: "TENANT_KEY_CREDENTIAL", parameterName: "tenant_key", location: "query", required: true },
+    };
+    await generateTypeScriptMCPServer(ir, { outputDir });
+    const { resolveSecurityAuth } = await importRuntimeModules(outputDir);
+    expect(await resolveSecurityAuth([], ir.securitySchemes, "public")).toEqual({ headers: {}, queryParams: {} });
+    process.env.HEADER_KEY_CREDENTIAL = "header-secret";
+    process.env.TENANT_KEY_CREDENTIAL = "tenant-secret";
+    expect(await resolveSecurityAuth(tool.securityRequirements ?? [], ir.securitySchemes, "mixed")).toEqual({
+      headers: { "X-API-Key": "header-secret" },
+      queryParams: { tenant_key: "tenant-secret" },
+    });
+  });
   it("injects query api-key auth into outgoing requests", async () => {
     const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-runtime-"));
     tempDirs.push(outputDir);

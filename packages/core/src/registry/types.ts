@@ -5,6 +5,7 @@ export interface RegistryVerificationSummary {
   mode: "mock" | "live";
   verifiedAt: string;
   compatibilityVersion: string;
+  finalIRHash?: string;
   toolCount?: number;
   passedToolCount?: number;
   skippedToolCount?: number;

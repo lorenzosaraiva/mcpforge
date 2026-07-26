@@ -17,6 +17,7 @@ import {
   type CompatibilityHarness,
 } from "../utils/compatibility-runner.js";
 import { connectToMCPServer, type MCPServerConnection } from "../utils/mcp-client.js";
+import { isNonInteractiveRuntime } from "../utils/runtime.js";
 import {
   runInvocationTests,
   runRegistrationTests,
@@ -25,10 +26,19 @@ import {
 
 const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
 
+function testSpinner(): Pick<ReturnType<typeof spinner>, "start" | "stop"> {
+  if (!isNonInteractiveRuntime()) return spinner();
+  return {
+    start: (message?: string) => { if (message) log.info(message); },
+    stop: (message?: string) => { if (message) log.info(message); },
+  };
+}
+
 interface TestCommandOptions {
   dir?: string;
   live?: boolean;
   timeout?: string;
+  skipInstall?: boolean;
 }
 
 interface ResolvedServerContext {
@@ -172,6 +182,7 @@ async function runCommand(command: string, args: string[], cwd: string): Promise
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
@@ -184,10 +195,14 @@ async function runCommand(command: string, args: string[], cwd: string): Promise
     });
 
     child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
       rejectPromise(error);
     });
 
-    child.on("close", (code) => {
+    child.on("exit", (code) => {
+      if (settled) return;
+      settled = true;
       const durationMs = Date.now() - startedAt;
       if (code === 0) {
         resolvePromise({
@@ -322,6 +337,7 @@ export function registerTestCommand(program: Command): void {
     .option("--dir <path>", "Generated server directory")
     .option("--live", "Run live API calls", false)
     .option("--timeout <ms>", "Per-tool call timeout", `${DEFAULT_TOOL_TIMEOUT_MS}`)
+    .option("--skip-install", "Skip npm install when dependencies are already present", false)
     .action(async (options: TestCommandOptions) => {
       intro("mcpforge test");
 
@@ -332,7 +348,7 @@ export function registerTestCommand(program: Command): void {
       try {
         const timeout = resolveTimeout(options.timeout);
 
-        const resolveSpinner = spinner();
+        const resolveSpinner = testSpinner();
         resolveSpinner.start("Resolving generated server...");
         resolvedContext = await resolveServerContext(options.dir);
         const { config, serverDir } = resolvedContext;
@@ -342,25 +358,33 @@ export function registerTestCommand(program: Command): void {
         log.step("Build check");
         const npmCommand = resolveNpmCommand();
 
-        const installSpinner = spinner();
-        installSpinner.start("Running npm install...");
-        const installResult = await runCommand(npmCommand, ["install"], serverDir);
-        installSpinner.stop(`npm install (${formatDuration(installResult.durationMs)})`);
+        if (!options.skipInstall) {
+          const installSpinner = testSpinner();
+          installSpinner.start("Running npm install...");
+          const installResult = await runCommand(
+            npmCommand,
+            ["install", "--prefer-offline", "--no-audit", "--no-fund"],
+            serverDir,
+          );
+          installSpinner.stop(`npm install (${formatDuration(installResult.durationMs)})`);
+        } else {
+          log.info("Skipping npm install (--skip-install).");
+        }
 
-        const buildSpinner = spinner();
+        const buildSpinner = testSpinner();
         buildSpinner.start("Running npm run build...");
         const buildResult = await runCommand(npmCommand, ["run", "build"], serverDir);
         buildSpinner.stop(`npm run build (${formatDuration(buildResult.durationMs)})`);
 
         if (!options.live) {
-          const compatibilitySpinner = spinner();
+          const compatibilitySpinner = testSpinner();
           compatibilitySpinner.start("Starting local compatibility harness...");
-          compatibilityHarness = await createCompatibilityHarness(config.ir.auth);
+          compatibilityHarness = await createCompatibilityHarness(config.ir);
           compatibilitySpinner.stop(`Compatibility harness ready at ${compatibilityHarness.baseUrl}`);
         }
 
         log.step("Server connection");
-        const connectSpinner = spinner();
+        const connectSpinner = testSpinner();
         connectSpinner.start("Starting MCP server over stdio...");
         connection = await connectToMCPServer(serverDir, timeout, compatibilityHarness?.env);
         connectSpinner.stop("MCP server started on stdio");

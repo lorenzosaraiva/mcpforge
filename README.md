@@ -5,7 +5,7 @@
 Generate MCP servers from OpenAPI specs or docs pages, then verify generated request compatibility before you publish or install them.
 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
-[![Release 1.0.0](https://img.shields.io/badge/release-1.0.0-blue.svg)](./CHANGELOG.md)
+[![Release 1.1.0](https://img.shields.io/badge/release-1.1.0-blue.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Demo
@@ -89,6 +89,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - **Workflow-aware update flow** (`update`) - Rechecks upstream APIs, reports workflow impact, and regenerates in place.
 - **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and verifies request construction against a local mock upstream before optional live calls.
 - **OAuth token lifecycle support** - OAuth-backed generated servers can use a static `ACCESS_TOKEN`, fetch client-credentials tokens, or renew access tokens from `OAUTH_REFRESH_TOKEN`.
+- **Operation-specific security** - Preserves public overrides, alternative auth methods, combined schemes, and operation OAuth scopes instead of flattening security across the API.
 - **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
 - **Verification-aware publishing** (`publish`) - Public registry publishing now requires a successful verification run by default, and registry entries expose verification metadata to installers.
 

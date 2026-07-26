@@ -1,10 +1,10 @@
 {
   "slug": "stripe",
   "name": "Stripe Payments",
-  "description": "Example registry scaffold entry for Stripe payments and billing workflows.",
+  "description": "Curated Stripe payments and billing workflow fixture.",
   "publisher": "lorenzosaraiva",
   "version": "1.0.0",
-  "toolCount": 47,
+  "toolCount": 2,
   "tags": ["payments", "billing"],
   "optimized": true,
   "workflowEnabled": true,
@@ -13,14 +13,16 @@
     "status": "passed",
     "mode": "mock",
     "verifiedAt": "2026-04-01T12:00:00.000Z",
-    "compatibilityVersion": "1",
-    "toolCount": 47,
-    "passedToolCount": 47,
+    "compatibilityVersion": "2",
+    "finalIRHash": "27e0355b69a666b0aacef754f49b980d9b7dc350f115f801e4779c3c416a0c2b",
+    "toolCount": 2,
+    "passedToolCount": 2,
     "skippedToolCount": 0,
     "failedToolCount": 0
   },
   "entryFile": "entries/stripe.json",
   "ir": {
+    "irVersion": 2,
     "apiName": "Stripe Payments",
     "apiDescription": "Example registry scaffold entry for Stripe payments and billing workflows.",
     "baseUrl": "https://api.stripe.com",
@@ -31,6 +33,18 @@
       "required": true,
       "hasSecuritySchemes": true
     },
+    "securitySchemes": {
+      "stripeAuth": {
+        "type": "bearer",
+        "scheme": "Bearer",
+        "envVarName": "STRIPE_API_KEY",
+        "required": true,
+        "hasSecuritySchemes": true
+      }
+    },
+    "defaultSecurityRequirements": [
+      { "schemes": [{ "scheme": "stripeAuth", "scopes": [] }] }
+    ],
     "tools": [
       {
         "kind": "workflow",
@@ -72,10 +86,49 @@
         "method": "POST",
         "path": "/v1/payment_links",
         "parameters": [],
+        "securityRequirements": [
+          { "schemes": [{ "scheme": "stripeAuth", "scopes": [] }] }
+        ],
         "tags": ["payments", "billing"]
       }
     ],
-    "rawEndpointCount": 47
+    "rawEndpointCount": 2
+  },
+  "sourceIR": {
+    "irVersion": 2,
+    "apiName": "Stripe Payments",
+    "apiDescription": "Curated Stripe payments and billing workflow fixture.",
+    "baseUrl": "https://api.stripe.com",
+    "auth": { "type": "bearer", "scheme": "Bearer", "envVarName": "STRIPE_API_KEY", "required": true, "hasSecuritySchemes": true },
+    "securitySchemes": {
+      "stripeAuth": { "type": "bearer", "scheme": "Bearer", "envVarName": "STRIPE_API_KEY", "required": true, "hasSecuritySchemes": true }
+    },
+    "defaultSecurityRequirements": [{ "schemes": [{ "scheme": "stripeAuth", "scopes": [] }] }],
+    "tools": [
+      {
+        "kind": "endpoint",
+        "name": "list_customers",
+        "originalOperationId": "list_customers",
+        "description": "List Stripe customers, optionally filtered by email.",
+        "method": "GET",
+        "path": "/v1/customers",
+        "parameters": [{ "name": "email", "description": "Customer email", "type": "string", "required": false, "location": "query" }],
+        "securityRequirements": [{ "schemes": [{ "scheme": "stripeAuth", "scopes": [] }] }],
+        "tags": ["payments", "billing"]
+      },
+      {
+        "kind": "endpoint",
+        "name": "create_payment_link",
+        "originalOperationId": "create_payment_link",
+        "description": "Create a Stripe payment link.",
+        "method": "POST",
+        "path": "/v1/payment_links",
+        "parameters": [],
+        "securityRequirements": [{ "schemes": [{ "scheme": "stripeAuth", "scopes": [] }] }],
+        "tags": ["payments", "billing"]
+      }
+    ],
+    "rawEndpointCount": 2
   },
   "specSource": "https://docs.stripe.com/api",
   "sourceType": "docs-url",

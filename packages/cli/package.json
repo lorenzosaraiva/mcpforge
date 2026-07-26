@@ -1,6 +1,6 @@
 {
   "name": "mcpforge",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -13,6 +13,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsup --config tsup.config.ts && node ./scripts/copy-templates.mjs",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
@@ -21,15 +24,17 @@
     "@anthropic-ai/sdk": "^0.67.0",
     "@apidevtools/swagger-parser": "^12.1.0",
     "@clack/prompts": "^0.11.0",
-    "@modelcontextprotocol/sdk": "^1.19.0",
+    "@mcpforge/core": "1.1.0",
     "commander": "^14.0.1",
-    "handlebars": "^4.7.8",
-    "zod": "^4.1.8"
+    "cross-spawn": "^7.0.6",
+    "handlebars": "^4.7.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^24.13.3",
     "tsup": "^8.5.0",
-    "tsx": "^4.20.5",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.3"
   }
 }

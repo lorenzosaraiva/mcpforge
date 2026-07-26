@@ -23,6 +23,11 @@ export interface RuntimeAuthConfig {
 }
 
 export const AUTH_CONFIG: RuntimeAuthConfig = {{{json auth}}};
+export const SECURITY_SCHEMES: Record<string, RuntimeAuthConfig> = {{{json securitySchemes}}};
+
+export interface SecurityRequirement {
+  schemes: Array<{ scheme: string; scopes: string[] }>;
+}
 
 const OAUTH_EXPIRY_SKEW_MS = 60_000;
 
@@ -64,6 +69,7 @@ interface OAuthTokenCache {
 }
 
 let oauthTokenCache: OAuthTokenCache | undefined;
+let oauthRefreshToken: string | undefined;
 
 function buildHeaderAuth(
   headerName: string,
@@ -110,7 +116,7 @@ async function fetchOAuthToken(authConfig: RuntimeAuthConfig): Promise<OAuthToke
 
   const clientId = readEnv("OAUTH_CLIENT_ID");
   const clientSecret = readEnv("OAUTH_CLIENT_SECRET");
-  const refreshToken = oauthTokenCache?.refreshToken ?? readEnv("OAUTH_REFRESH_TOKEN");
+  const refreshToken = oauthRefreshToken ?? readEnv("OAUTH_REFRESH_TOKEN");
   const body = new URLSearchParams();
 
   if (refreshToken) {
@@ -169,6 +175,7 @@ async function fetchOAuthToken(authConfig: RuntimeAuthConfig): Promise<OAuthToke
       ? payload.refresh_token.trim()
       : refreshToken,
   };
+  oauthRefreshToken = oauthTokenCache.refreshToken;
 
   return oauthTokenCache;
 }
@@ -324,4 +331,78 @@ export function resolveAuthState(
       queryParams: {},
     },
   };
+}
+
+async function materializeAuthState(auth: AuthState): Promise<AuthState> {
+  return auth.resolve ? auth.resolve() : auth;
+}
+
+function mergeAuthStates(states: AuthState[]): AuthState {
+  const headers: Record<string, string> = {};
+  const queryParams: Record<string, string> = {};
+  for (const state of states) {
+    for (const [name, value] of Object.entries(state.headers)) {
+      const existingKey = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
+      if (name.toLowerCase() === "cookie" && existingKey) {
+        headers[existingKey] = `${headers[existingKey]}; ${value}`;
+      } else {
+        headers[existingKey ?? name] = value;
+      }
+    }
+    Object.assign(queryParams, state.queryParams);
+  }
+  return { headers, queryParams };
+}
+
+/** Resolve OpenAPI OR alternatives and AND-combined schemes for one operation. */
+export async function resolveSecurityAuth(
+  requirements: SecurityRequirement[],
+  schemes: Record<string, RuntimeAuthConfig>,
+  endpointName: string,
+): Promise<AuthState> {
+  if (requirements.length === 0) {
+    return { headers: {}, queryParams: {} };
+  }
+
+  const failures: string[] = [];
+  for (const alternative of requirements) {
+    const states: AuthState[] = [];
+    let usable = true;
+    for (const reference of alternative.schemes) {
+      const config = schemes[reference.scheme];
+      if (!config) {
+        failures.push(`unknown scheme ${reference.scheme}`);
+        usable = false;
+        break;
+      }
+      if (config.type === "none") {
+        failures.push(`unsupported scheme ${reference.scheme}`);
+        usable = false;
+        break;
+      }
+      const resolution = resolveAuthState(config);
+      if (resolution.startupWarning && config.required !== false) {
+        failures.push(`${reference.scheme}: ${resolution.startupWarning}`);
+        usable = false;
+        break;
+      }
+      try {
+        states.push(await materializeAuthState(resolution.auth));
+      } catch (error) {
+        failures.push(`${reference.scheme}: ${error instanceof Error ? error.message : "credential resolution failed"}`);
+        usable = false;
+        break;
+      }
+    }
+    if (usable) {
+      return mergeAuthStates(states);
+    }
+  }
+
+  throw new Error(
+    `Authentication for operation "${endpointName}" is not configured. ` +
+      `Accepted security alternatives: ${requirements
+        .map((requirement) => requirement.schemes.map((entry) => entry.scheme).join(" + "))
+        .join(" OR ")}. ${failures.join("; ")}`,
+  );
 }

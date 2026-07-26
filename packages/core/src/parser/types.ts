@@ -1,10 +1,23 @@
 export interface MCPForgeIR {
+  irVersion?: number;
   apiName: string;
   apiDescription: string;
   baseUrl: string;
   auth: AuthConfig;
+  securitySchemes?: Record<string, AuthConfig>;
+  defaultSecurityRequirements?: SecurityRequirement[];
   tools: ToolDefinition[];
   rawEndpointCount: number;
+}
+
+export interface SecurityRequirementScheme {
+  scheme: string;
+  scopes: string[];
+}
+
+/** One OpenAPI Security Requirement Object. Schemes inside it are ANDed; array entries are OR alternatives. */
+export interface SecurityRequirement {
+  schemes: SecurityRequirementScheme[];
 }
 
 export type AuthLocation = "header" | "query" | "cookie";
@@ -50,9 +63,12 @@ export interface EndpointToolDefinition extends BaseToolDefinition {
   kind: "endpoint";
   method: string;
   path: string;
+  baseUrl?: string;
   parameters: ToolParameter[];
   requestBody?: RequestBodyDef;
   responseDescription?: string;
+  /** Effective operation security after applying the document-level fallback. Empty means explicitly public. */
+  securityRequirements?: SecurityRequirement[];
 }
 
 export interface WorkflowValueRef {
@@ -101,6 +117,7 @@ export interface ToolParameter {
 
 export interface RequestBodyDef {
   contentType: string;
+  contentTypes?: Array<{ contentType: string; schema: Record<string, unknown> }>;
   schema: Record<string, unknown>;
   required: boolean;
   description?: string;

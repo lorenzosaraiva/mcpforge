@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { MCPForgeIR, WorkflowToolDefinition } from "../parser/types.js";
+import type { EndpointToolDefinition, MCPForgeIR, WorkflowToolDefinition } from "../parser/types.js";
 import { diffIR } from "./ir-differ.js";
 
 function createWorkflowTool(
@@ -80,5 +80,21 @@ describe("diffIR", () => {
 
     expect(result.summary.high).toBeGreaterThan(0);
     expect(result.changes.some((change) => change.details === "Workflow dependencies changed.")).toBe(true);
+  });
+
+  it("flags operation security and server changes as high risk", () => {
+    const endpoint: EndpointToolDefinition = {
+      kind: "endpoint", name: "list_items", originalOperationId: "list_items", description: "List", method: "GET", path: "/items", parameters: [], tags: [],
+      securityRequirements: [{ schemes: [{ scheme: "key", scopes: [] }] }],
+    };
+    const base = createIR(createWorkflowTool({ name: "unused" }));
+    const oldIR: MCPForgeIR = { ...base, tools: [endpoint] };
+    const newIR: MCPForgeIR = {
+      ...base,
+      tools: [{ ...endpoint, baseUrl: "https://regional.example.com", securityRequirements: [] }],
+    };
+    const result = diffIR(oldIR, newIR);
+    expect(result.changes.some((change) => change.details === "Operation server URL changed." && change.risk === "high")).toBe(true);
+    expect(result.changes.some((change) => change.details === "Operation security requirements changed." && change.risk === "high")).toBe(true);
   });
 });

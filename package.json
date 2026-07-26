@@ -1,13 +1,16 @@
 {
   "name": "mcpforge",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Generate production-ready MCP servers from OpenAPI specs.",
   "author": "Lorenzo",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/mcpforge.git"
+    "url": "https://github.com/lorenzosaraiva/mcpforge.git"
   },
   "keywords": [
     "mcp",
@@ -21,12 +24,21 @@
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "@hono/node-server": "2.0.12",
+    "esbuild": "0.28.1"
+  },
   "scripts": {
     "build": "npm run build -w @mcpforge/core && npm run build -w mcpforge",
     "dev": "tsx packages/cli/src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8",
+    "registry:validate": "node scripts/validate-registry.mjs",
+    "release:validate": "node scripts/validate-release.mjs",
+    "test:package": "node scripts/package-smoke.mjs"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   CURRENT_COMPATIBILITY_VERSION,
   computeIRHash,
+  loadConfig,
   resolveVerificationState,
 } from "./config.js";
 
@@ -64,5 +68,31 @@ describe("resolveVerificationState", () => {
 
   it("returns unverified when verification metadata is missing", () => {
     expect(resolveVerificationState(undefined, fixtureIR)).toBe("unverified");
+  });
+
+  it("migrates legacy global-auth IR and marks old compatibility verification stale", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "mcpforge-config-"));
+    const configPath = join(directory, "mcpforge.config.json");
+    const legacyIR = {
+      ...fixtureIR,
+      auth: { type: "api-key", envVarName: "API_KEY", parameterName: "X-Key", location: "header", required: true },
+    };
+    await writeFile(configPath, JSON.stringify({
+      specSource: "spec.json",
+      ir: legacyIR,
+      verification: { status: "passed", mode: "mock", verifiedAt: "2026-01-01", compatibilityVersion: "1", finalIRHash: computeIRHash(legacyIR) },
+    }));
+    try {
+      const loaded = await loadConfig(configPath);
+      expect(loaded.configVersion).toBe(2);
+      expect(loaded.ir.irVersion).toBe(2);
+      expect(loaded.ir.securitySchemes).toEqual({ legacy: legacyIR.auth });
+      expect(loaded.ir.tools[0]?.kind === "endpoint" ? loaded.ir.tools[0].securityRequirements : undefined).toEqual([
+        { schemes: [{ scheme: "legacy", scopes: [] }] },
+      ]);
+      expect(loaded.verificationState).toBe("stale");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

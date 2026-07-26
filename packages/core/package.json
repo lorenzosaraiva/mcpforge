@@ -1,20 +1,30 @@
 {
   "name": "@mcpforge/core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node ./scripts/copy-templates.mjs"
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "build": "npm run clean && tsc -p tsconfig.json && node ./scripts/copy-templates.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",
     "@apidevtools/swagger-parser": "^12.1.0",
-    "handlebars": "^4.7.8",
-    "zod": "^4.1.8"
+    "handlebars": "^4.7.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.5.2"

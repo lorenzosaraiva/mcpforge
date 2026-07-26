@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
 
 import { registerAddCommand } from "./commands/add.js";
 import { registerAuthCommand } from "./commands/auth.js";
@@ -14,11 +15,14 @@ import { registerTestCommand } from "./commands/test.js";
 import { registerUpdateCommand } from "./commands/update.js";
 
 const program = new Command();
+const packageVersion = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }
+).version;
 
 program
   .name("mcpforge")
   .description("Generate MCP servers from OpenAPI specs")
-  .version("1.0.0");
+  .version(packageVersion);
 
 registerInitCommand(program);
 registerGenerateCommand(program);

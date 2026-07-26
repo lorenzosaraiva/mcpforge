@@ -1,6 +1,6 @@
 # mcpforge
 
-Generate MCP servers from OpenAPI specs or docs pages, then curate the public tool surface for agents.
+Generate, curate, and verify MCP servers from OpenAPI specs or documentation pages.
 
 ## Common Usage
 
@@ -23,7 +23,10 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 - `mcpforge inspect <spec>` - Inspect a spec and preview workflow planning with `--workflows`.
 - `mcpforge diff` - Compare stored source IR against the latest upstream version and report risk-scored changes.
 - `mcpforge update` - Refresh from upstream changes and regenerate in place.
-- `mcpforge test` - Rebuild a generated server, verify registered tools, and smoke-test each public handler over stdio.
+- `mcpforge test` - Rebuild a generated server, verify registered tools, and validate each public handler against a local mock upstream over stdio.
+- `mcpforge auth` - Manage GitHub credentials for publishing.
+- `mcpforge publish` - Publish a freshly verified generated server to the registry.
+- `mcpforge search` / `mcpforge add` - Browse and install registry servers.
 
 ## Testing
 
@@ -31,4 +34,6 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 npx mcpforge test --dir ./mcp-server-my-api
 ```
 
-Dry-run mode validates `listTools` against `mcpforge.config.json` and calls each public tool with minimal inputs. Use `--live` only when the generated project has real auth configured.
+Mock mode validates `listTools`, path/query/header construction, operation-specific authentication, OAuth token acquisition, and supported body encodings. Use `--live` only when the generated project has real credentials configured.
+
+Requires Node.js 20 or newer.
