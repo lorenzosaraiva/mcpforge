@@ -59,6 +59,20 @@ describe("generateTypeScriptMCPServer", () => {
             location: "query",
           },
         ],
+        response: {
+          statusCode: "200",
+          contentType: "application/json",
+          schema: {
+            type: "object",
+            properties: {
+              customers: {
+                type: "array",
+                items: { type: "object", properties: { id: { type: "string" } } },
+              },
+            },
+            required: ["customers"],
+          },
+        },
       }),
     ]);
 
@@ -78,10 +92,15 @@ describe("generateTypeScriptMCPServer", () => {
 
     const envExampleContent = await readFile(join(outputDir, ".env.example"), "utf8");
     const runtimeContent = await readFile(join(outputDir, "src", "runtime.ts"), "utf8");
+    const indexContent = await readFile(join(outputDir, "src", "index.ts"), "utf8");
     const handlerContent = await readFile(join(outputDir, "src", "tools", "find_customers.ts"), "utf8");
 
     expect(envExampleContent).toContain("API_BASE_URL=https://api.example.com");
     expect(runtimeContent).toContain("export async function invokeEndpoint");
+    expect(indexContent).toContain('"customers"');
+    expect(indexContent).toContain("outputSchema:");
+    expect(indexContent).toContain("response.structuredContent = result");
+    expect(indexContent).toContain('new Set([\n  "find_customers"\n])');
     expect(handlerContent).toContain("selectWorkflowOutput");
     expect(handlerContent).toContain("WORKFLOW_STEPS");
   });

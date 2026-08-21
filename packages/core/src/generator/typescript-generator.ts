@@ -14,7 +14,7 @@ import type {
 } from "../parser/types.js";
 import { isEndpointTool, isWorkflowTool } from "../parser/types.js";
 import type { GenerateProjectOptions, GenerateProjectResult } from "./types.js";
-import { toJsonSchema, toKebabCase } from "../utils/schema-utils.js";
+import { toJsonSchema, toKebabCase, toStructuredOutputSchema } from "../utils/schema-utils.js";
 
 interface PreparedEndpointRuntime {
   name: string;
@@ -42,6 +42,7 @@ interface PreparedPublicToolBase {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
   handlerFunctionName: string;
   handlerFileName: string;
 }
@@ -215,12 +216,14 @@ function toPreparedEndpointRuntime(
 function createPreparedToolBase(
   tool: ToolDefinition,
   inputSchema: Record<string, unknown>,
+  outputSchema?: Record<string, unknown>,
 ): PreparedPublicToolBase {
   return {
     kind: tool.kind,
     name: tool.name,
     description: tool.description,
     inputSchema,
+    outputSchema,
     handlerFunctionName: `handle${toPascalCase(tool.name)}`,
     handlerFileName: tool.name,
   };
@@ -276,7 +279,11 @@ function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPubl
   return ir.tools.map((tool) => {
     if (isEndpointTool(tool)) {
       return {
-        ...createPreparedToolBase(tool, toEndpointInputSchema(tool)),
+        ...createPreparedToolBase(
+          tool,
+          toEndpointInputSchema(tool),
+          toStructuredOutputSchema(tool.response),
+        ),
         kind: "endpoint",
         endpoint: toPreparedEndpointRuntime(tool, fallbackSecurityRequirements),
       };
@@ -284,7 +291,7 @@ function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPubl
 
     const workflowInputSchema = JSON.parse(JSON.stringify(tool.inputSchema)) as Record<string, unknown>;
     return {
-      ...createPreparedToolBase(tool, workflowInputSchema),
+      ...createPreparedToolBase(tool, workflowInputSchema, tool.outputSchema),
       kind: "workflow",
       steps: prepareWorkflowSteps(tool, endpointMap, fallbackSecurityRequirements),
       output: tool.output,
@@ -352,6 +359,9 @@ export async function generateTypeScriptMCPServer(
     authRequired,
     authOptional: hasAuth && !authRequired,
     tools: preparedTools,
+    structuredOutputToolNames: preparedTools
+      .filter((tool) => Boolean(tool.outputSchema))
+      .map((tool) => tool.name),
     workflowToolCount: preparedTools.filter((tool) => tool.kind === "workflow").length,
     endpointToolCount: preparedTools.filter((tool) => tool.kind === "endpoint").length,
     generatedAt: new Date().toISOString(),

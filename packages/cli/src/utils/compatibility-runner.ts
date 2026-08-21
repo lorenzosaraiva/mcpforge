@@ -14,7 +14,11 @@ import {
   type SecurityRequirement,
   type ToolDefinition,
 } from "../core.js";
-import { buildCompatibilityInvocationArgs, type ToolTestResult } from "./test-runner.js";
+import {
+  buildCompatibilityInvocationArgs,
+  sampleValueFromSchema,
+  type ToolTestResult,
+} from "./test-runner.js";
 
 type CallToolResponse = Awaited<ReturnType<Client["callTool"]>>;
 
@@ -30,7 +34,7 @@ interface RequestExpectation {
   query: Record<string, string[]>;
   headers: Record<string, string>;
   body: ExpectedBody;
-  responseBody: Record<string, unknown>;
+  responseBody: unknown;
 }
 
 interface ParsedRequestBody {
@@ -340,7 +344,16 @@ function buildExpectedHeaders(tool: EndpointToolDefinition, args: Record<string,
   return headers;
 }
 
-function buildResponseBody(expectation: RequestExpectation): Record<string, unknown> {
+function buildResponseBody(
+  expectation: RequestExpectation,
+  tool: EndpointToolDefinition,
+): unknown {
+  if (tool.response) {
+    return sampleValueFromSchema(tool.response.schema, `${tool.name}_response`, {
+      includeOptionalObjectProperties: true,
+    });
+  }
+
   const syntheticId = `${expectation.label.replace(/[^a-zA-Z0-9]+/g, "_") || "step"}_id`;
   return {
     ok: true,
@@ -593,7 +606,7 @@ function buildEndpointExpectation(
     body: buildExpectedBody(tool, args),
     responseBody: {},
   };
-  expectation.responseBody = buildResponseBody(expectation);
+  expectation.responseBody = buildResponseBody(expectation, tool);
   return expectation;
 }
 
@@ -616,7 +629,7 @@ function buildWorkflowExpectations(
     const endpointArgs = isRecord(resolvedArgs) ? resolvedArgs : {};
     const expectation = buildEndpointExpectation(endpointTool, endpointArgs, applyEndpointAuth(endpointTool, sourceIR));
     expectation.label = `${tool.name}:${step.id}`;
-    expectation.responseBody = buildResponseBody(expectation);
+    expectation.responseBody = buildResponseBody(expectation, endpointTool);
     expectations.push(expectation);
 
     const simulatedResult = {

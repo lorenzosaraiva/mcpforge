@@ -75,6 +75,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - Curates raw endpoints into a smaller endpoint toolset with `--optimize`
 - Plans task-oriented workflow tools with `--workflows`
 - Generates a complete TypeScript MCP server with auth scaffolding and docs
+- Preserves OpenAPI success-response schemas as MCP `outputSchema` and `structuredContent`
 - Generates OAuth token handling for client credentials and refresh-token renewal
 - Detects upstream spec drift and reports risk-scored breaking changes
 - Verifies generated request compatibility over stdio with `mcpforge test`
@@ -88,6 +89,7 @@ mcpforge publish --slug my-api --tags payments,billing
 - **Breaking change detection** (`diff`) - Compares stored source IR against the latest upstream spec and reports high, medium, and low-risk changes.
 - **Workflow-aware update flow** (`update`) - Rechecks upstream APIs, reports workflow impact, and regenerates in place.
 - **Generated-server verification** (`test`) - Installs dependencies, builds the generated project, validates `listTools`, and verifies request construction against a local mock upstream before optional live calls.
+- **Structured tool outputs** - Carries documented success-response schemas into MCP tool registration and returns machine-readable `structuredContent` alongside the text fallback. Generated workflows inherit the output contract when they return a complete endpoint result.
 - **OAuth token lifecycle support** - OAuth-backed generated servers can use a static `ACCESS_TOKEN`, fetch client-credentials tokens, or renew access tokens from `OAUTH_REFRESH_TOKEN`.
 - **Operation-specific security** - Preserves public overrides, alternative auth methods, combined schemes, and operation OAuth scopes instead of flattening security across the API.
 - **Repo-level CI and tests** - The repo now includes Vitest coverage for workflow planning, generation, diffing, and selection logic, plus a GitHub Actions workflow.
@@ -177,6 +179,7 @@ By default, `mcpforge test`:
 - runs `npm install` and `npm run build`
 - starts the generated server over stdio
 - verifies `listTools` matches `mcpforge.config.json`
+- verifies registered input and output schemas match the generated IR
 - starts a local mock upstream server and points `API_BASE_URL` at it
 - calls each public tool with generated compatibility inputs
 - verifies path, query, header, auth, OAuth token acquisition, and request-body construction for the supported matrix
@@ -192,6 +195,7 @@ Current verified request compatibility covers:
 
 - Auth: header API keys, query API keys, cookie API keys, bearer tokens, basic auth, OAuth client credentials, and OAuth refresh-token renewal
 - Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible payloads
+- Responses: OpenAPI 3.x media-type schemas and Swagger 2.0 response schemas exposed as structured MCP output
 - Verification path: local mock-upstream validation via `mcpforge test`
 
 OAuth notes:

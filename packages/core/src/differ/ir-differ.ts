@@ -3,11 +3,13 @@ import type {
   EndpointToolDefinition,
   MCPForgeIR,
   RequestBodyDef,
+  ResponseDef,
   ToolDefinition,
   ToolParameter,
   WorkflowToolDefinition,
 } from "../parser/types.js";
 import { isEndpointTool, isWorkflowTool } from "../parser/types.js";
+import { toStructuredOutputSchema } from "../utils/schema-utils.js";
 
 export interface DiffResult {
   summary: {
@@ -155,6 +157,9 @@ function requestBodyHasIncompatibleSchemaChange(
 ): boolean {
   const oldType = schemaType(oldSchema);
   const newType = schemaType(newSchema);
+  if (oldType && !newType) {
+    return true;
+  }
   if (oldType && newType && oldType !== newType) {
     return true;
   }
@@ -188,6 +193,61 @@ function requestBodyHasIncompatibleSchemaChange(
   }
 
   return stableStringify(oldSchema) !== stableStringify(newSchema);
+}
+
+function responseSchemaHasIncompatibleChange(
+  oldSchema: Record<string, unknown>,
+  newSchema: Record<string, unknown>,
+): boolean {
+  const oldType = schemaType(oldSchema);
+  const newType = schemaType(newSchema);
+  if (oldType && newType && oldType !== newType) {
+    return true;
+  }
+
+  if (oldType === "object" && newType === "object") {
+    const oldProps = toPropertyMap(oldSchema);
+    const newProps = toPropertyMap(newSchema);
+    const oldRequired = toRequiredSet(oldSchema);
+    const newRequired = toRequiredSet(newSchema);
+
+    for (const [propertyName, oldPropSchema] of Object.entries(oldProps)) {
+      const newPropSchema = newProps[propertyName];
+      if (!newPropSchema || responseSchemaHasIncompatibleChange(oldPropSchema, newPropSchema)) {
+        return true;
+      }
+    }
+
+    for (const requiredProperty of oldRequired) {
+      if (!newRequired.has(requiredProperty)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  if (oldType === "array" && newType === "array") {
+    const oldItems = asRecord(oldSchema.items);
+    const newItems = asRecord(newSchema.items);
+    if (Object.keys(oldItems).length > 0 && Object.keys(newItems).length === 0) {
+      return true;
+    }
+    if (Object.keys(oldItems).length > 0 && Object.keys(newItems).length > 0) {
+      return responseSchemaHasIncompatibleChange(oldItems, newItems);
+    }
+  }
+
+  const oldEnum = Array.isArray(oldSchema.enum) ? oldSchema.enum : undefined;
+  const newEnum = Array.isArray(newSchema.enum) ? newSchema.enum : undefined;
+  if (oldEnum && !newEnum) {
+    return true;
+  }
+  if (oldEnum && newEnum) {
+    return newEnum.some((value) => !oldEnum.some((oldValue) => stableStringify(oldValue) === stableStringify(value)));
+  }
+
+  return false;
 }
 
 function addChange(changes: DiffChange[], change: DiffChange): void {
@@ -493,6 +553,108 @@ function compareRequestBody(
   return changes;
 }
 
+function responseContentTypes(response: ResponseDef): string[] {
+  return (response.contentTypes ?? [{ contentType: response.contentType, schema: response.schema }])
+    .map((entry) => entry.contentType)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function responseContentSchemas(response: ResponseDef): Map<string, Record<string, unknown>> {
+  return new Map(
+    (response.contentTypes ?? [{ contentType: response.contentType, schema: response.schema }])
+      .map((entry) => [entry.contentType, entry.schema] as const),
+  );
+}
+
+function compareResponse(
+  oldTool: EndpointToolDefinition,
+  newTool: EndpointToolDefinition,
+): DiffChange[] {
+  const changes: DiffChange[] = [];
+  const oldResponse = oldTool.response;
+  const newResponse = newTool.response;
+
+  if (!oldResponse && !newResponse) {
+    return changes;
+  }
+
+  const toolMeta = {
+    toolName: newTool.name,
+    method: newTool.method,
+    path: newTool.path,
+    type: "modified" as const,
+  };
+
+  if (!oldResponse && newResponse) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "low",
+      details: "Structured response schema was added.",
+      after: stableStringify(toStructuredOutputSchema(newResponse)),
+    });
+    return changes;
+  }
+
+  if (oldResponse && !newResponse) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "high",
+      details: "Structured response schema was removed.",
+      before: stableStringify(toStructuredOutputSchema(oldResponse)),
+    });
+    return changes;
+  }
+
+  const resolvedOldResponse = oldResponse as ResponseDef;
+  const resolvedNewResponse = newResponse as ResponseDef;
+
+  if (resolvedOldResponse.statusCode !== resolvedNewResponse.statusCode) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: "medium",
+      details: "Documented success response status changed.",
+      before: resolvedOldResponse.statusCode,
+      after: resolvedNewResponse.statusCode,
+    });
+  }
+
+  const oldContentTypes = responseContentTypes(resolvedOldResponse);
+  const newContentTypes = responseContentTypes(resolvedNewResponse);
+  if (stableStringify(oldContentTypes) !== stableStringify(newContentTypes)) {
+    addChange(changes, {
+      ...toolMeta,
+      risk: oldContentTypes.some((value) => !newContentTypes.includes(value)) ? "high" : "low",
+      details: "Supported response content types changed.",
+      before: oldContentTypes.join(", "),
+      after: newContentTypes.join(", "),
+    });
+  }
+
+  const oldOutputSchema = toStructuredOutputSchema(resolvedOldResponse) ?? {};
+  const newOutputSchema = toStructuredOutputSchema(resolvedNewResponse) ?? {};
+  const oldSchemaJson = stableStringify(oldOutputSchema);
+  const newSchemaJson = stableStringify(newOutputSchema);
+  if (oldSchemaJson !== newSchemaJson) {
+    const oldSchemas = responseContentSchemas(resolvedOldResponse);
+    const newSchemas = responseContentSchemas(resolvedNewResponse);
+    const incompatible = [...oldSchemas].some(([contentType, oldSchema]) => {
+      const newSchema = newSchemas.get(contentType);
+      return newSchema ? responseSchemaHasIncompatibleChange(oldSchema, newSchema) : false;
+    });
+    addChange(changes, {
+      ...toolMeta,
+      risk: incompatible ? "high" : "low",
+      details: incompatible
+        ? "Response schema changed in an incompatible way."
+        : "Response schema changed (compatible additions detected).",
+      before: oldSchemaJson,
+      after: newSchemaJson,
+    });
+  }
+
+  return changes;
+}
+
 function compareWorkflowPair(
   oldTool: WorkflowToolDefinition,
   newTool: WorkflowToolDefinition,
@@ -554,6 +716,22 @@ function compareWorkflowPair(
       details: "Workflow output mapping changed.",
       before: stableStringify(oldTool.output),
       after: stableStringify(newTool.output),
+    });
+  }
+
+  if (stableStringify(oldTool.outputSchema) !== stableStringify(newTool.outputSchema)) {
+    const incompatible = Boolean(
+      oldTool.outputSchema &&
+      (!newTool.outputSchema || responseSchemaHasIncompatibleChange(oldTool.outputSchema, newTool.outputSchema)),
+    );
+    addChange(changes, {
+      ...toolMeta,
+      risk: incompatible ? "high" : "low",
+      details: incompatible
+        ? "Workflow output schema changed in an incompatible way."
+        : "Workflow output schema changed (compatible additions detected).",
+      before: oldTool.outputSchema ? stableStringify(oldTool.outputSchema) : "(none)",
+      after: newTool.outputSchema ? stableStringify(newTool.outputSchema) : "(none)",
     });
   }
 
@@ -688,6 +866,7 @@ function compareToolPair(pair: MatchedToolPair): DiffChange[] {
 
   changes.push(...compareParameters(oldTool, newTool));
   changes.push(...compareRequestBody(oldTool, newTool));
+  changes.push(...compareResponse(oldTool, newTool));
   return changes;
 }
 

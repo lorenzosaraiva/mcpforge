@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added first-class structured tool outputs: OpenAPI and Swagger success-response schemas now flow through the IR into MCP `outputSchema` declarations and `structuredContent` results.
+- Propagated endpoint output contracts to generated single-step workflows, taught compatibility tests to synthesize schema-valid responses, and added response-schema drift detection.
+
 ## 1.1.0 (2026-07-26)
 
 - Preserved operation-specific OpenAPI security, including public overrides, OR alternatives, AND-combined schemes, and operation scopes.

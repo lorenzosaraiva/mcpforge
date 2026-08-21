@@ -2,8 +2,14 @@ import { isDeepStrictEqual } from "node:util";
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
-import { isWorkflowTool, type ToolDefinition, type ToolParameter } from "../core.js";
-import { toJsonSchema, truncateText } from "../../../core/src/utils/schema-utils.js";
+import {
+  isWorkflowTool,
+  toJsonSchema,
+  toStructuredOutputSchema,
+  truncateText,
+  type ToolDefinition,
+  type ToolParameter,
+} from "../core.js";
 
 const DEFAULT_LIST_TOOLS_TIMEOUT_MS = 10_000;
 
@@ -24,7 +30,7 @@ export interface InvocationTestOptions {
   getServerStderrOutput?: () => string;
 }
 
-interface SampleGenerationOptions {
+export interface SampleGenerationOptions {
   includeOptionalObjectProperties?: boolean;
   requestBodyContentType?: string;
 }
@@ -159,7 +165,7 @@ function sampleBinaryValue(fieldName: string | undefined, options: SampleGenerat
   };
 }
 
-function sampleValueFromSchema(
+export function sampleValueFromSchema(
   schema: unknown,
   fieldName?: string,
   options: SampleGenerationOptions = {},
@@ -512,6 +518,20 @@ export async function runRegistrationTests(
         phase: "registration",
         status: "fail",
         message: "description mismatch",
+        durationMs,
+      });
+      continue;
+    }
+
+    const expectedOutputSchema = isWorkflowTool(expectedTool)
+      ? expectedTool.outputSchema
+      : toStructuredOutputSchema(expectedTool.response);
+    if (!isDeepStrictEqual(actualTool.outputSchema, expectedOutputSchema)) {
+      results.push({
+        toolName: expectedTool.name,
+        phase: "registration",
+        status: "fail",
+        message: "output schema mismatch",
         durationMs,
       });
       continue;

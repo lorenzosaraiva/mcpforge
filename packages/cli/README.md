@@ -34,6 +34,6 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 npx mcpforge test --dir ./mcp-server-my-api
 ```
 
-Mock mode validates `listTools`, path/query/header construction, operation-specific authentication, OAuth token acquisition, and supported body encodings. Use `--live` only when the generated project has real credentials configured.
+Mock mode validates `listTools` input/output schemas, path/query/header construction, operation-specific authentication, OAuth token acquisition, supported body encodings, and schema-valid structured responses. Use `--live` only when the generated project has real credentials configured.
 
 Requires Node.js 20 or newer.

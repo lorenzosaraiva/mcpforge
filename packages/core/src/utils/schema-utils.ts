@@ -1,3 +1,5 @@
+import type { ResponseDef } from "../parser/types.js";
+
 type JsonValue =
   | string
   | number
@@ -96,6 +98,35 @@ export function toJsonSchema(schema: unknown): Record<string, unknown> {
   }
 
   return normalized as Record<string, unknown>;
+}
+
+export function toStructuredOutputSchema(
+  response: ResponseDef | undefined,
+): Record<string, unknown> | undefined {
+  if (!response) {
+    return undefined;
+  }
+
+  const contentSchemas = response.contentTypes
+    ?.map((entry) => toJsonSchema(entry.schema))
+    .filter((schema) => Object.keys(schema).length > 0) ?? [];
+  const dataSchema =
+    contentSchemas.length > 1
+      ? { anyOf: contentSchemas }
+      : contentSchemas[0] ?? toJsonSchema(response.schema);
+
+  return {
+    type: "object",
+    properties: {
+      status: {
+        type: "integer",
+        description: "HTTP response status.",
+      },
+      data: dataSchema,
+    },
+    required: ["status", "data"],
+    additionalProperties: false,
+  };
 }
 
 export function inferSchemaType(schema: unknown): string {

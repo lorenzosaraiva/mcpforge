@@ -8,6 +8,8 @@ export {
   parseOpenAPISpec,
   planWorkflowTools,
   scrapeDocsFromUrl,
+  toJsonSchema,
+  toStructuredOutputSchema,
   truncateText,
 } from "@mcpforge/core";
 
@@ -21,6 +23,7 @@ export type {
   RegistryEntry,
   RegistryIndex,
   RegistryIndexEntry,
+  ResponseDef,
   ScrapedDocPage,
   ToolDefinition,
   WorkflowToolDefinition,

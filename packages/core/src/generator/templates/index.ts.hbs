@@ -35,9 +35,14 @@ const TOOL_DEFINITIONS = [
     name: {{{json this.name}}},
     description: {{{json this.description}}},
     inputSchema: {{{json this.inputSchema}}},
+{{#if this.outputSchema}}
+    outputSchema: {{{json this.outputSchema}}},
+{{/if}}
   }{{#unless @last}},{{/unless}}
 {{/each}}
 ];
+
+const STRUCTURED_OUTPUT_TOOL_NAMES = new Set({{{json structuredOutputToolNames}}});
 
 const TOOL_HANDLERS: Record<string, (input: Record<string, unknown>) => Promise<unknown>> = {
 {{#each tools}}
@@ -91,7 +96,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
 
   try {
     const result = await toolHandler(args);
-    return {
+    const response: CallToolResult = {
       content: [
         {
           type: "text",
@@ -99,6 +104,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
         },
       ],
     };
+    if (
+      STRUCTURED_OUTPUT_TOOL_NAMES.has(toolName) &&
+      result !== null &&
+      typeof result === "object" &&
+      !Array.isArray(result)
+    ) {
+      response.structuredContent = result as Record<string, unknown>;
+    }
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown execution error";
     return {

@@ -13,7 +13,7 @@ export * from "./differ/ir-differ.js";
 export { diffIR } from "./differ/ir-differ.js";
 
 export { planWorkflowTools } from "./planner/workflow-planner.js";
-export { truncateText } from "./utils/schema-utils.js";
+export { toJsonSchema, toStructuredOutputSchema, truncateText } from "./utils/schema-utils.js";
 
 export * from "./scraper/docs-scraper.js";
 export { scrapeDocsFromUrl } from "./scraper/docs-scraper.js";

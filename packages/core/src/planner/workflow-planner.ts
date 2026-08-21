@@ -6,7 +6,12 @@ import type {
   WorkflowStepDefinition,
   WorkflowToolDefinition,
 } from "../parser/types.js";
-import { toJsonSchema, toSnakeCase, truncateText } from "../utils/schema-utils.js";
+import {
+  toJsonSchema,
+  toSnakeCase,
+  toStructuredOutputSchema,
+  truncateText,
+} from "../utils/schema-utils.js";
 
 export interface WorkflowPlanningOptions {
   maxTools?: number;
@@ -473,6 +478,7 @@ function toWorkflowCandidate(
       tags: tool.tags,
       responseDescription: tool.responseDescription,
       inputSchema,
+      outputSchema: toStructuredOutputSchema(tool.response),
       dependsOnOperationIds: [operationId],
       steps: [step],
       output: {

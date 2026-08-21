@@ -33,14 +33,14 @@ try {
     } },
     security: [{ headerKey: [] }],
     paths: { "/things/{id}": {
-      get: { operationId: "getThing", security: [], parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "ok" } } },
+      get: { operationId: "getThing", security: [], parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "ok", content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, active: { type: "boolean" } }, required: ["id"] } } } } } },
       post: {
         operationId: "updateThing",
         servers: [{ url: "https://special.example.com/v2" }],
         security: [{ headerKey: [], tenantKey: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         requestBody: { required: true, content: { "application/x-www-form-urlencoded": { schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } } } },
-        responses: { "200": { description: "ok" } },
+        responses: { "200": { description: "ok", content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id", "name"] } } } } },
       },
     } },
   }));

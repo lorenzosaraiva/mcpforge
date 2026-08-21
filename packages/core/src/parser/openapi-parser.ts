@@ -6,6 +6,7 @@ import type {
   MCPForgeIR,
   OAuthFlowConfig,
   RequestBodyDef,
+  ResponseDef,
   SecurityRequirement,
   ToolParameter,
 } from "./types.js";
@@ -117,18 +118,120 @@ function normalizeToolName(operationId: string | undefined, method: string, path
   return toSnakeCase(fromPath);
 }
 
-function resolveResponseDescription(operation: OpenAPIOperation): string | undefined {
+interface SelectedResponse {
+  statusCode: string;
+  response: Record<string, unknown>;
+}
+
+function selectSuccessResponse(operation: OpenAPIOperation): SelectedResponse | undefined {
   const responses = asRecord(operation.responses);
   const entries = Object.entries(responses);
-  const success = entries.find(([status]) => /^2\d\d$/.test(status)) ?? entries.find(([status]) => status === "default");
-  if (!success) {
+  const successCandidates = [
+    ...entries.filter(([status]) => status === "200"),
+    ...entries.filter(([status]) => status !== "200" && (/^2\d\d$/.test(status) || /^2XX$/i.test(status))),
+  ];
+  const candidates = successCandidates.length > 0
+    ? successCandidates
+    : entries.filter(([status]) => status === "default");
+
+  for (const [statusCode, response] of candidates) {
+    const responseObject = asRecord(response);
+    const content = asRecord(responseObject.content);
+    const hasOpenApiSchema = Object.values(content).some(
+      (mediaType) => Object.keys(asRecord(asRecord(mediaType).schema)).length > 0,
+    );
+    const hasSwaggerSchema = Object.keys(asRecord(responseObject.schema)).length > 0;
+    if (hasOpenApiSchema || hasSwaggerSchema) {
+      return { statusCode, response: responseObject };
+    }
+  }
+
+  const fallback = candidates[0];
+  return fallback ? { statusCode: fallback[0], response: asRecord(fallback[1]) } : undefined;
+}
+
+function resolveResponseDescription(operation: OpenAPIOperation): string | undefined {
+  const selected = selectSuccessResponse(operation);
+  if (!selected) {
     return undefined;
   }
-  const responseObject = asRecord(success[1]);
+  const responseObject = selected.response;
   if (typeof responseObject.description === "string" && responseObject.description.trim()) {
     return truncateText(responseObject.description, 200);
   }
   return undefined;
+}
+
+function resolveProduces(document: OpenAPIDocument, operation: OpenAPIOperation): string[] {
+  const operationProduces = asStringArray(operation.produces)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (operationProduces.length > 0) {
+    return operationProduces;
+  }
+
+  return asStringArray(document.produces)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function mapResponse(
+  document: OpenAPIDocument,
+  operation: OpenAPIOperation,
+): ResponseDef | undefined {
+  const selected = selectSuccessResponse(operation);
+  if (!selected) {
+    return undefined;
+  }
+
+  const description =
+    typeof selected.response.description === "string" && selected.response.description.trim()
+      ? truncateText(selected.response.description, 200)
+      : undefined;
+  const content = asRecord(selected.response.content);
+  const contentTypes = Object.entries(content)
+    .map(([contentType, mediaType]) => ({
+      contentType,
+      schema: toJsonSchema(asRecord(mediaType).schema),
+    }))
+    .filter((entry) => Object.keys(entry.schema).length > 0);
+
+  if (contentTypes.length > 0) {
+    const preferred =
+      contentTypes.find((entry) => entry.contentType.toLowerCase() === "application/json") ??
+      contentTypes.find((entry) => entry.contentType.toLowerCase().endsWith("+json")) ??
+      contentTypes[0];
+    if (!preferred) {
+      return undefined;
+    }
+
+    return {
+      statusCode: selected.statusCode,
+      contentType: preferred.contentType,
+      contentTypes,
+      schema: preferred.schema,
+      description,
+    };
+  }
+
+  const swaggerSchema = toJsonSchema(selected.response.schema);
+  if (Object.keys(asRecord(selected.response.schema)).length === 0) {
+    return undefined;
+  }
+  const produces = resolveProduces(document, operation);
+  const contentType =
+    produces.find((value) => value.toLowerCase() === "application/json") ??
+    produces.find((value) => value.toLowerCase().endsWith("+json")) ??
+    produces[0] ??
+    "application/json";
+
+  return {
+    statusCode: selected.statusCode,
+    contentType,
+    contentTypes: produces.map((value) => ({ contentType: value, schema: swaggerSchema })),
+    schema: swaggerSchema,
+    description,
+  };
 }
 
 function mergeParameters(pathParameters: unknown, operationParameters: unknown): OpenAPIParameter[] {
@@ -687,6 +790,7 @@ function convertOperationToTool(
       (Array.isArray(pathItem.servers) ? pathItem.servers.map(resolveServerObjectUrl).find(Boolean) : undefined),
     parameters: mappedParameters,
     requestBody: mapRequestBody(document, operation, mergedParameters),
+    response: mapResponse(document, operation),
     responseDescription: resolveResponseDescription(operation),
     tags: asStringArray(operation.tags),
     originalOperationId: operationId,

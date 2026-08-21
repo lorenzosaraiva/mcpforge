@@ -66,6 +66,7 @@ export interface EndpointToolDefinition extends BaseToolDefinition {
   baseUrl?: string;
   parameters: ToolParameter[];
   requestBody?: RequestBodyDef;
+  response?: ResponseDef;
   responseDescription?: string;
   /** Effective operation security after applying the document-level fallback. Empty means explicitly public. */
   securityRequirements?: SecurityRequirement[];
@@ -97,6 +98,8 @@ export interface WorkflowStepDefinition {
 export interface WorkflowToolDefinition extends BaseToolDefinition {
   kind: "workflow";
   inputSchema: Record<string, unknown>;
+  /** MCP-compatible root object schema for the workflow result, when it can be derived safely. */
+  outputSchema?: Record<string, unknown>;
   dependsOnOperationIds: string[];
   steps: WorkflowStepDefinition[];
   output?: WorkflowValue;
@@ -120,6 +123,14 @@ export interface RequestBodyDef {
   contentTypes?: Array<{ contentType: string; schema: Record<string, unknown> }>;
   schema: Record<string, unknown>;
   required: boolean;
+  description?: string;
+}
+
+export interface ResponseDef {
+  statusCode: string;
+  contentType: string;
+  contentTypes?: Array<{ contentType: string; schema: Record<string, unknown> }>;
+  schema: Record<string, unknown>;
   description?: string;
 }
 

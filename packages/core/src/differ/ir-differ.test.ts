@@ -97,4 +97,55 @@ describe("diffIR", () => {
     expect(result.changes.some((change) => change.details === "Operation server URL changed." && change.risk === "high")).toBe(true);
     expect(result.changes.some((change) => change.details === "Operation security requirements changed." && change.risk === "high")).toBe(true);
   });
+
+  it("flags incompatible response schema changes as high risk", () => {
+    const endpoint: EndpointToolDefinition = {
+      kind: "endpoint",
+      name: "get_item",
+      originalOperationId: "get_item",
+      description: "Get an item",
+      method: "GET",
+      path: "/items/{id}",
+      parameters: [],
+      tags: ["items"],
+      response: {
+        statusCode: "200",
+        contentType: "application/json",
+        schema: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+          },
+          required: ["id", "name"],
+        },
+      },
+    };
+    const base = createIR(createWorkflowTool({ name: "unused" }));
+    const oldIR: MCPForgeIR = { ...base, tools: [endpoint] };
+    const newIR: MCPForgeIR = {
+      ...base,
+      tools: [
+        {
+          ...endpoint,
+          response: {
+            ...endpoint.response!,
+            schema: {
+              type: "object",
+              properties: { id: { type: "string" } },
+              required: ["id"],
+            },
+          },
+        },
+      ],
+    };
+
+    const result = diffIR(oldIR, newIR);
+
+    expect(
+      result.changes.some(
+        (change) => change.details === "Response schema changed in an incompatible way." && change.risk === "high",
+      ),
+    ).toBe(true);
+  });
 });

@@ -5,6 +5,7 @@
   "host": "upload.example.com",
   "basePath": "/v2",
   "consumes": ["multipart/form-data"],
+  "produces": ["application/json"],
   "paths": {
     "/assets": {
       "post": {
@@ -12,7 +13,16 @@
           { "name": "file", "in": "formData", "required": true, "type": "file" },
           { "name": "label", "in": "formData", "type": "string" }
         ],
-        "responses": { "200": { "description": "ok" } }
+        "responses": {
+          "201": {
+            "description": "created",
+            "schema": {
+              "type": "object",
+              "properties": { "id": { "type": "string" } },
+              "required": ["id"]
+            }
+          }
+        }
       }
     }
   }

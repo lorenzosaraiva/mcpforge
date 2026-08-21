@@ -12,7 +12,29 @@ describe("OpenAPI parser conformance fixtures", () => {
     const publicTool = ir.tools.find((tool) => tool.originalOperationId === "getPublic");
     const combined = ir.tools.find((tool) => tool.originalOperationId === "getCombined");
     expect(publicTool?.kind === "endpoint" ? publicTool.securityRequirements : undefined).toEqual([]);
+    expect(publicTool?.kind === "endpoint" ? publicTool.response : undefined).toEqual({
+      statusCode: "200",
+      contentType: "application/json",
+      contentTypes: [
+        {
+          contentType: "application/json",
+          schema: {
+            type: "object",
+            properties: { available: { type: "boolean" } },
+            required: ["available"],
+          },
+        },
+        { contentType: "text/plain", schema: { type: "string" } },
+      ],
+      schema: {
+        type: "object",
+        properties: { available: { type: "boolean" } },
+        required: ["available"],
+      },
+      description: "Public status",
+    });
     expect(combined?.kind === "endpoint" ? combined.baseUrl : undefined).toBe("https://special.example.com/api");
+    expect(combined?.kind === "endpoint" ? combined.response : undefined).toBeUndefined();
     expect(combined?.kind === "endpoint" ? combined.securityRequirements : undefined).toEqual([
       { schemes: [{ scheme: "headerKey", scopes: [] }, { scheme: "tenantKey", scopes: [] }] },
     ]);
@@ -28,6 +50,11 @@ describe("OpenAPI parser conformance fixtures", () => {
       contentType: "multipart/form-data",
       required: true,
       schema: { type: "object", required: ["file"] },
+    });
+    expect(tool?.kind === "endpoint" ? tool.response : undefined).toMatchObject({
+      statusCode: "201",
+      contentType: "application/json",
+      schema: { type: "object", required: ["id"] },
     });
   });
 });
