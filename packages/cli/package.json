@@ -21,11 +21,11 @@
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.0",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@apidevtools/swagger-parser": "^12.1.0",
-    "@clack/prompts": "^0.11.0",
+    "@clack/prompts": "^1.7.0",
     "@mcpforge/core": "1.1.0",
-    "commander": "^14.0.1",
+    "commander": "^15.0.0",
     "cross-spawn": "^7.0.6",
     "handlebars": "^4.7.9",
     "zod": "^4.4.3"

@@ -21,7 +21,7 @@
     "build": "npm run clean && tsc -p tsconfig.json && node ./scripts/copy-templates.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.0",
+    "@anthropic-ai/sdk": "^0.120.0",
     "@apidevtools/swagger-parser": "^12.1.0",
     "handlebars": "^4.7.9",
     "zod": "^4.4.3"
