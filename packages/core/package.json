@@ -21,10 +21,10 @@
     "build": "npm run clean && tsc -p tsconfig.json && node ./scripts/copy-templates.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.0",
-    "@apidevtools/swagger-parser": "^12.1.0",
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@apidevtools/swagger-parser": "^13.0.0",
     "handlebars": "^4.7.9",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.5.2"
