@@ -22,9 +22,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
-    "@apidevtools/swagger-parser": "^13.1.0",
+    "@apidevtools/swagger-parser": "^12.1.0",
     "handlebars": "^4.7.10",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/node": "^24.5.2"
