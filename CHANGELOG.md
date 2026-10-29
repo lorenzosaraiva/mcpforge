@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.2.0 (2026-10-29)
+
+- Added `mcpforge connect` to generate or resume a server, verify it against a mock upstream, collect credentials, and register it in a Cursor project with preview, backup, and collision handling.
+- Reused generated-server verification from both `test` and `connect`, and exercised client registration through the packed CLI.
+- Added strict CLI source typechecking to the build and corrected type errors previously hidden by bundling.
+- Updated compatible dependencies and patched vulnerable transitive resolutions while retaining the advertised Node 20 support; deferred breaking dependency majors until the next runtime/toolchain migration.
+- Added a phased roadmap for verified API connections, client adapters, diagnostics, and task-based evaluation.
+
 - Added first-class structured tool outputs: OpenAPI and Swagger success-response schemas now flow through the IR into MCP `outputSchema` declarations and `structuredContent` results.
 - Propagated endpoint output contracts to generated single-step workflows, taught compatibility tests to synthesize schema-valid responses, and added response-schema drift detection.
 

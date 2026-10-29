@@ -178,7 +178,7 @@ export async function fetchGitHubContentFile(
   return (await response.json()) as GitHubContentFile;
 }
 
-export function decodeGitHubContentFile(file: GitHubContentFile): string {
+export function decodeGitHubContentFile(file: Pick<GitHubContentFile, "content">): string {
   return Buffer.from(file.content.replace(/\n/g, ""), "base64").toString("utf8");
 }
 

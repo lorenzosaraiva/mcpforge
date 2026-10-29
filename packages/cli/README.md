@@ -4,6 +4,16 @@ Generate, curate, and verify MCP servers from OpenAPI specs or documentation pag
 
 ## Common Usage
 
+Connect an OpenAPI spec to the current Cursor project:
+
+```bash
+npx mcpforge connect ./openapi.yaml --client cursor
+```
+
+Previews the entry, generates/builds/verifies the server against a mock API, prompts for credentials, and preserves other entries when updating `.cursor/mcp.json`. Credentials stay in the server's ignored `.env` file. Enable/reload the server in Cursor after setup; real authentication is not tested.
+
+Use `--dry-run` for a preview, `--project-dir <dir>` to target another Cursor project, or pass an existing generated directory to resume. Non-interactive setup requires `--yes`; use `--skip-install` only when dependencies are already installed. Existing server names with different settings are preserved: choose another `--name`.
+
 Generate curated workflow tools from a spec:
 
 ```bash
@@ -18,6 +28,7 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 
 ## Commands
 
+- `mcpforge connect <spec-or-directory>` - Generate or resume a server, verify its tools, and configure Cursor. Supports `--optimize`, `--workflows`, `--pick`, and `--skip-credentials`.
 - `mcpforge init <spec>` - Parse a spec or docs URL and generate a project. Use `--optimize`, `--workflows`, `--pick`, and `--dry-run` as needed.
 - `mcpforge generate` - Regenerate from `mcpforge.config.json`, preserving saved workflow and optimization settings.
 - `mcpforge inspect <spec>` - Inspect a spec and preview workflow planning with `--workflows`.

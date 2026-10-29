@@ -7,6 +7,8 @@ updates:
     # Revisit these together with the Node support/toolchain migration.
     # The next majors require Node 22+ or remove the compiler API used by tests.
     ignore:
+      - dependency-name: "@anthropic-ai/sdk"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "@apidevtools/swagger-parser"
         update-types: ["version-update:semver-major"]
       - dependency-name: commander
