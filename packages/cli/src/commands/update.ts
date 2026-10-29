@@ -220,9 +220,8 @@ function printWorkflowImpacts(
   diffResult: DiffResult,
 ): void {
   const changedOperationIds = resolveChangedOperationIds(oldSourceIR, newSourceIR, diffResult);
-  const impactedWorkflows = currentIR.tools.filter(
+  const impactedWorkflows = currentIR.tools.filter(isWorkflowTool).filter(
     (tool) =>
-      isWorkflowTool(tool) &&
       tool.dependsOnOperationIds.some((operationId) => changedOperationIds.has(operationId)),
   );
 

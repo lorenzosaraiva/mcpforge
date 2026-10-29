@@ -34,7 +34,7 @@ function testSpinner(): Pick<ReturnType<typeof spinner>, "start" | "stop"> {
   };
 }
 
-interface TestCommandOptions {
+export interface TestCommandOptions {
   dir?: string;
   live?: boolean;
   timeout?: string;
@@ -339,144 +339,151 @@ export function registerTestCommand(program: Command): void {
     .option("--timeout <ms>", "Per-tool call timeout", `${DEFAULT_TOOL_TIMEOUT_MS}`)
     .option("--skip-install", "Skip npm install when dependencies are already present", false)
     .action(async (options: TestCommandOptions) => {
-      intro("mcpforge test");
-
-      let connection: MCPServerConnection | undefined;
-      let compatibilityHarness: CompatibilityHarness | undefined;
-      let resolvedContext: ResolvedServerContext | undefined;
-
-      try {
-        const timeout = resolveTimeout(options.timeout);
-
-        const resolveSpinner = testSpinner();
-        resolveSpinner.start("Resolving generated server...");
-        resolvedContext = await resolveServerContext(options.dir);
-        const { config, serverDir } = resolvedContext;
-        assertOutputDirectoryUsable(serverDir);
-        resolveSpinner.stop(`Testing project at ${serverDir}`);
-
-        log.step("Build check");
-        const npmCommand = resolveNpmCommand();
-
-        if (!options.skipInstall) {
-          const installSpinner = testSpinner();
-          installSpinner.start("Running npm install...");
-          const installResult = await runCommand(
-            npmCommand,
-            ["install", "--prefer-offline", "--no-audit", "--no-fund"],
-            serverDir,
-          );
-          installSpinner.stop(`npm install (${formatDuration(installResult.durationMs)})`);
-        } else {
-          log.info("Skipping npm install (--skip-install).");
-        }
-
-        const buildSpinner = testSpinner();
-        buildSpinner.start("Running npm run build...");
-        const buildResult = await runCommand(npmCommand, ["run", "build"], serverDir);
-        buildSpinner.stop(`npm run build (${formatDuration(buildResult.durationMs)})`);
-
-        if (!options.live) {
-          const compatibilitySpinner = testSpinner();
-          compatibilitySpinner.start("Starting local compatibility harness...");
-          compatibilityHarness = await createCompatibilityHarness(config.ir);
-          compatibilitySpinner.stop(`Compatibility harness ready at ${compatibilityHarness.baseUrl}`);
-        }
-
-        log.step("Server connection");
-        const connectSpinner = testSpinner();
-        connectSpinner.start("Starting MCP server over stdio...");
-        connection = await connectToMCPServer(serverDir, timeout, compatibilityHarness?.env);
-        connectSpinner.stop("MCP server started on stdio");
-
-        const expectedTools = config.ir.tools;
-
-        log.step(`Tool registration (${expectedTools.length} tools)`);
-        const registrationResults = await runRegistrationTests(connection.client, expectedTools);
-        const registrationFailures = registrationResults.filter((result) => result.status === "fail");
-        if (registrationFailures.length === 0) {
-          log.success(`All ${expectedTools.length} tools registered correctly`);
-        } else {
-          const registrationWidth = Math.max(
-            24,
-            ...registrationFailures.map((result) => result.toolName.length + 4),
-          );
-          for (const result of registrationFailures) {
-            renderToolResult(result, registrationWidth);
-          }
-        }
-
-        log.step(options.live ? "Tool live tests" : "Tool compatibility tests");
-        const invocationResults = options.live
-          ? await runInvocationTests(connection.client, expectedTools, {
-              live: true,
-              timeout,
-              getServerStderrOutput: connection.getStderrOutput,
-            })
-          : await runCompatibilityTests(connection.client, expectedTools, {
-              timeout,
-              sourceIR: config.sourceIR,
-              getServerStderrOutput: connection.getStderrOutput,
-              harness: compatibilityHarness!,
-            });
-
-        const invocationWidth = Math.max(
-          24,
-          ...invocationResults.map((result) => result.toolName.length + 4),
-        );
-        for (const result of invocationResults) {
-          renderToolResult(result, invocationWidth);
-        }
-
-        const registrationFailureCount = registrationFailures.length;
-        const invocationFailureCount = invocationResults.filter((result) => result.status === "fail").length;
-        const summary = summarizeInvocationResults(invocationResults);
-
-        if (registrationFailureCount > 0 || invocationFailureCount > 0) {
-          if (resolvedContext) {
-            await writeVerificationResult(resolvedContext, {
-              status: "failed",
-              mode: options.live ? "live" : "mock",
-              results: invocationResults,
-            });
-          }
-          const details = [
-            `Results: ${summary}`,
-            registrationFailureCount > 0
-              ? `${registrationFailureCount} registration check(s) failed`
-              : undefined,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .join(", ");
-          outro(details);
-          process.exitCode = 1;
-          return;
-        }
-
-        if (resolvedContext) {
-          await writeVerificationResult(resolvedContext, {
-            status: "passed",
-            mode: options.live ? "live" : "mock",
-            results: invocationResults,
-          });
-        }
-
-        outro(`Results: ${summary}`);
-      } catch (error) {
-        if (error instanceof CommandExecutionError) {
-          const output = formatCapturedOutput(error.stderr || error.stdout);
-          log.error(
-            `${error.command} failed after ${formatDuration(error.durationMs)} with exit code ${error.exitCode}.\n${output}`,
-          );
-        } else {
-          log.error(getErrorMessage(error));
-        }
-
-        outro("Test run failed.");
-        process.exitCode = 1;
-      } finally {
-        await connection?.close();
-        await compatibilityHarness?.close();
-      }
+      if (!(await verifyGeneratedServer(options))) process.exitCode = 1;
     });
+}
+
+/** Build and verify a generated project. Mock mode never invokes the real API. */
+export async function verifyGeneratedServer(options: TestCommandOptions): Promise<boolean> {
+  intro("mcpforge test");
+
+  let connection: MCPServerConnection | undefined;
+  let compatibilityHarness: CompatibilityHarness | undefined;
+  let resolvedContext: ResolvedServerContext | undefined;
+
+  try {
+    const timeout = resolveTimeout(options.timeout);
+
+    const resolveSpinner = testSpinner();
+    resolveSpinner.start("Resolving generated server...");
+    resolvedContext = await resolveServerContext(options.dir);
+    const { config, serverDir } = resolvedContext;
+    assertOutputDirectoryUsable(serverDir);
+    resolveSpinner.stop(`Testing project at ${serverDir}`);
+
+    log.step("Build check");
+    const npmCommand = resolveNpmCommand();
+
+    if (!options.skipInstall) {
+      const installSpinner = testSpinner();
+      installSpinner.start("Running npm install...");
+      const installResult = await runCommand(
+        npmCommand,
+        ["install", "--prefer-offline", "--no-audit", "--no-fund"],
+        serverDir,
+      );
+      installSpinner.stop(`npm install (${formatDuration(installResult.durationMs)})`);
+    } else {
+      log.info("Skipping npm install (--skip-install).");
+    }
+
+    const buildSpinner = testSpinner();
+    buildSpinner.start("Running npm run build...");
+    const buildResult = await runCommand(npmCommand, ["run", "build"], serverDir);
+    buildSpinner.stop(`npm run build (${formatDuration(buildResult.durationMs)})`);
+
+    if (!options.live) {
+      const compatibilitySpinner = testSpinner();
+      compatibilitySpinner.start("Starting local compatibility harness...");
+      compatibilityHarness = await createCompatibilityHarness(config.ir);
+      compatibilitySpinner.stop(`Compatibility harness ready at ${compatibilityHarness.baseUrl}`);
+    }
+
+    log.step("Server connection");
+    const connectSpinner = testSpinner();
+    connectSpinner.start("Starting MCP server over stdio...");
+    connection = await connectToMCPServer(serverDir, timeout, compatibilityHarness
+      ? { ...compatibilityHarness.env, DOTENV_CONFIG_PATH: process.platform === "win32" ? "NUL" : "/dev/null" }
+      : undefined);
+    connectSpinner.stop("MCP server started on stdio");
+
+    const expectedTools = config.ir.tools;
+
+    log.step(`Tool registration (${expectedTools.length} tools)`);
+    const registrationResults = await runRegistrationTests(connection.client, expectedTools);
+    const registrationFailures = registrationResults.filter((result) => result.status === "fail");
+    if (registrationFailures.length === 0) {
+      log.success(`All ${expectedTools.length} tools registered correctly`);
+    } else {
+      const registrationWidth = Math.max(
+        24,
+        ...registrationFailures.map((result) => result.toolName.length + 4),
+      );
+      for (const result of registrationFailures) {
+        renderToolResult(result, registrationWidth);
+      }
+    }
+
+    log.step(options.live ? "Tool live tests" : "Tool compatibility tests");
+    const invocationResults = options.live
+      ? await runInvocationTests(connection.client, expectedTools, {
+          live: true,
+          timeout,
+          getServerStderrOutput: connection.getStderrOutput,
+        })
+      : await runCompatibilityTests(connection.client, expectedTools, {
+          timeout,
+          sourceIR: config.sourceIR,
+          getServerStderrOutput: connection.getStderrOutput,
+          harness: compatibilityHarness!,
+        });
+
+    const invocationWidth = Math.max(
+      24,
+      ...invocationResults.map((result) => result.toolName.length + 4),
+    );
+    for (const result of invocationResults) {
+      renderToolResult(result, invocationWidth);
+    }
+
+    const registrationFailureCount = registrationFailures.length;
+    const invocationFailureCount = invocationResults.filter((result) => result.status === "fail").length;
+    const summary = summarizeInvocationResults(invocationResults);
+
+    if (registrationFailureCount > 0 || invocationFailureCount > 0) {
+      if (resolvedContext) {
+        await writeVerificationResult(resolvedContext, {
+          status: "failed",
+          mode: options.live ? "live" : "mock",
+          results: invocationResults,
+        });
+      }
+      const details = [
+        `Results: ${summary}`,
+        registrationFailureCount > 0
+          ? `${registrationFailureCount} registration check(s) failed`
+          : undefined,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(", ");
+      outro(details);
+      return false;
+    }
+
+    if (resolvedContext) {
+      await writeVerificationResult(resolvedContext, {
+        status: "passed",
+        mode: options.live ? "live" : "mock",
+        results: invocationResults,
+      });
+    }
+
+    outro(`Results: ${summary}`);
+    return true;
+  } catch (error) {
+    if (error instanceof CommandExecutionError) {
+      const output = formatCapturedOutput(error.stderr || error.stdout);
+      log.error(
+        `${error.command} failed after ${formatDuration(error.durationMs)} with exit code ${error.exitCode}.\n${output}`,
+      );
+    } else {
+      log.error(getErrorMessage(error));
+    }
+
+    outro("Test run failed.");
+    return false;
+  } finally {
+    await connection?.close();
+    await compatibilityHarness?.close();
+  }
 }

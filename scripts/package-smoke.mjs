@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -45,11 +46,36 @@ try {
     } },
   }));
   const output = join(temporary, "generated");
+  run(process.execPath, [cli, "connect", specPath, "--output", output, "--project-dir", temporary, "--dry-run"], temporary);
+  await assert.rejects(access(output), { code: "ENOENT" });
+  const cursorDirectory = join(temporary, ".cursor");
+  await assert.rejects(access(cursorDirectory), { code: "ENOENT" });
   await mkdir(output, { recursive: true });
   run(process.execPath, [cli, "init", specPath, "--output", output], temporary);
   runNpm(["install", "--prefer-offline", "--no-audit", "--no-fund"], output);
   run(process.execPath, [cli, "test", "--dir", output, "--skip-install"], temporary);
-  process.stdout.write("Packed artifact generated, built, launched, and verified a server.\n");
+  await mkdir(cursorDirectory);
+  const cursorPath = join(cursorDirectory, "mcp.json");
+  const original = JSON.stringify({ mcpServers: { existing: { command: "keep-existing" } }, custom: true });
+  await writeFile(cursorPath, original);
+  const connectArgs = [cli, "connect", output, "--project-dir", temporary, "--yes", "--skip-install", "--skip-credentials"];
+  run(process.execPath, connectArgs, temporary);
+  const connected = await readFile(cursorPath, "utf8");
+  const cursor = JSON.parse(connected);
+  assert.deepEqual(cursor.mcpServers.existing, { command: "keep-existing" });
+  assert.equal(cursor.custom, true);
+  assert.deepEqual(cursor.mcpServers["mcpforge-package-fixture"], {
+    command: process.execPath,
+    args: [join(output, "dist", "index.js")],
+    env: { DOTENV_CONFIG_PATH: join(output, ".env") },
+  });
+  const backups = (await readdir(cursorDirectory)).filter((name) => name.endsWith(".bak"));
+  assert.equal(backups.length, 1);
+  assert.equal(await readFile(join(cursorDirectory, backups[0]), "utf8"), original);
+  run(process.execPath, connectArgs, temporary);
+  assert.equal(await readFile(cursorPath, "utf8"), connected);
+  assert.equal((await readdir(cursorDirectory)).filter((name) => name.endsWith(".bak")).length, 1);
+  process.stdout.write("Packed artifact generated, built, verified, and connected a server; reconnect preserved client configuration.\n");
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

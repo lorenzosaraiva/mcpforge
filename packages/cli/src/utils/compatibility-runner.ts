@@ -432,7 +432,7 @@ function resolveWorkflowReference(
     return getPathValue(input, value.$fromInput);
   }
   if (keys.length === 1 && typeof value.$fromStep === "string") {
-    const [stepKey, ...rest] = value.$fromStep.split(".");
+    const [stepKey = "", ...rest] = value.$fromStep.split(".");
     const base = stepResults[stepKey];
     return rest.length === 0 ? base : getPathValue(base, rest.join("."));
   }
@@ -687,7 +687,7 @@ async function parseMultipartBody(
   const syntheticRequest = new Request("http://compat.local/", {
     method: request.method,
     headers: parsedHeaders,
-    body: rawBody,
+    body: new Uint8Array(rawBody),
   });
   const formData = await syntheticRequest.formData();
   const result: Record<string, unknown> = {};

@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 
 import { registerAddCommand } from "./commands/add.js";
+import { registerConnectCommand } from "./commands/connect.js";
 import { registerAuthCommand } from "./commands/auth.js";
 import { registerDiffCommand } from "./commands/diff.js";
 import { registerGenerateCommand } from "./commands/generate.js";
@@ -25,6 +26,7 @@ program
   .version(packageVersion);
 
 registerInitCommand(program);
+registerConnectCommand(program);
 registerGenerateCommand(program);
 registerInspectCommand(program);
 registerDiffCommand(program);

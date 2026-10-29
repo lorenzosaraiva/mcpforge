@@ -189,9 +189,9 @@ function resolveWorkflowImpacts(
 ): string[] {
   const changedOperationIds = resolveChangedOperationIds(oldSourceIR, newSourceIR, result);
   return currentIR.tools
+    .filter(isWorkflowTool)
     .filter(
       (tool) =>
-        isWorkflowTool(tool) &&
         tool.dependsOnOperationIds.some((operationId) => changedOperationIds.has(operationId)),
     )
     .map(

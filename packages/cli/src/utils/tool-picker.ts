@@ -1,4 +1,4 @@
-import { cancel, isCancel, multiselect, note, select } from "@clack/prompts";
+import { cancel, multiselect, note, select } from "@clack/prompts";
 
 import type { MCPForgeIR, ToolDefinition } from "../core.js";
 import { isEndpointTool } from "../core.js";
@@ -20,13 +20,13 @@ interface TagGroup {
 const DEFAULT_LARGE_API_THRESHOLD = 50;
 const DESCRIPTION_LIMIT = 60;
 
-function finishPrompt<T>(result: T | symbol): T {
-  if (isCancel(result)) {
+function finishPrompt<T>(result: T): Exclude<T, symbol> {
+  if (typeof result === "symbol") {
     cancel("Operation cancelled.");
     process.exit(0);
   }
 
-  return result;
+  return result as Exclude<T, symbol>;
 }
 
 function truncateDescription(value: string): string {

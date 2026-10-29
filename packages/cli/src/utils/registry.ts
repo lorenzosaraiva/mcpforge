@@ -31,7 +31,7 @@ function normalize(value: string): string {
 
 function splitRegistryRepoValue(value: string): { fullName: string; ref: string } {
   const trimmed = value.trim().replace(/\.git$/i, "").replace(/^https?:\/\/github\.com\//i, "");
-  const [fullName, explicitRef] = trimmed.split("#", 2);
+  const [fullName = "", explicitRef] = trimmed.split("#", 2);
   return {
     fullName: fullName.replace(/^\/+|\/+$/g, ""),
     ref: explicitRef?.trim() || DEFAULT_REGISTRY_REF,
@@ -68,9 +68,9 @@ function levenshteinDistance(left: string, right: string): number {
     for (let column = 0; column < right.length; column += 1) {
       const substitutionCost = left[row] === right[column] ? 0 : 1;
       current[column + 1] = Math.min(
-        current[column] + 1,
-        previous[column + 1] + 1,
-        previous[column] + substitutionCost,
+        current[column]! + 1,
+        previous[column + 1]! + 1,
+        previous[column]! + substitutionCost,
       );
     }
 
@@ -78,7 +78,7 @@ function levenshteinDistance(left: string, right: string): number {
     current = new Array<number>(right.length + 1).fill(0);
   }
 
-  return previous[right.length];
+  return previous[right.length]!;
 }
 
 function scoreCandidate(query: string, candidate: string): number {

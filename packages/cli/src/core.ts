@@ -25,6 +25,8 @@ export type {
   RegistryIndexEntry,
   ResponseDef,
   ScrapedDocPage,
+  SecurityRequirement,
   ToolDefinition,
+  ToolParameter,
   WorkflowToolDefinition,
 } from "@mcpforge/core";
