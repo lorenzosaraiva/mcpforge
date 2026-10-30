@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +36,31 @@ const fixtureIR = {
 };
 
 describe("resolveVerificationState", () => {
+  it("hashes schema keys independently of locale and omitted JSON properties", () => {
+    const ir = {
+      ...fixtureIR,
+      tools: fixtureIR.tools.map((tool) => ({
+        ...tool,
+        response: {
+          statusCode: "200",
+          contentType: "application/json",
+          schema: { A: 1, a: 2, omitted: undefined },
+        },
+      })),
+    };
+    const locale = vi
+      .spyOn(String.prototype, "localeCompare")
+      .mockImplementation(() => {
+        throw new Error("locale must not affect receipts");
+      });
+    let actual: string;
+    try {
+      actual = computeIRHash(ir);
+    } finally {
+      locale.mockRestore();
+    }
+    expect(actual!).toBe(computeIRHash(JSON.parse(JSON.stringify(ir))));
+  });
   it("returns verified when hash and compatibility version match", () => {
     expect(
       resolveVerificationState(

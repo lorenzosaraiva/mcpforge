@@ -192,7 +192,7 @@ function resolveSpecSourceForRuntime(
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "null";
   }
 
   if (Array.isArray(value)) {
@@ -200,9 +200,10 @@ function stableStringify(value: unknown): string {
   }
 
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort((left, right) =>
-    left.localeCompare(right),
-  );
+  // JSON object order must be independent of OS locale and persistence.
+  const keys = Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort();
   return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
 }
 
