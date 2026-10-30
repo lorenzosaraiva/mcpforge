@@ -11,10 +11,10 @@ export default defineConfig({
   splitting: false,
   dts: false,
   shims: true,
+  noExternal: ["@mcpforge/core"],
   external: [
     "ajv",
     "ajv-formats",
-    "@mcpforge/core",
     "@anthropic-ai/sdk",
     "@apidevtools/swagger-parser",
     "@clack/prompts",

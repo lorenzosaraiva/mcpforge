@@ -2,6 +2,8 @@
 
 Generate, curate, and verify MCP servers from OpenAPI specs or documentation pages.
 
+The CLI includes its internal generator core. Installing `mcpforge` requires no separate `@mcpforge/core` package.
+
 The 2.0 release candidate requires Node.js 22.19+. It adds managed connections for Cursor, Claude Desktop, and VS Code, read-only generation, runtime-bound verification, and lifecycle diagnostics. Install with `npm install -g mcpforge@2.0.0-rc.1` only after the candidate is published; until then build the repository checkout and use `npm run dev -- <command>`.
 
 ## Common Usage
