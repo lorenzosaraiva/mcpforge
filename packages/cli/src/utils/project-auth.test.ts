@@ -35,6 +35,33 @@ const ir: MCPForgeIR = {
   ],
 };
 describe("selected operation credentials", () => {
+  it("recognizes refresh-token credentials and token URLs supplied by the specification", () => {
+    const oauth = {
+      type: "oauth2" as const,
+      envVarName: "TOKEN",
+      tokenUrl: "https://example.invalid/token",
+    };
+    const source = {
+      ...ir,
+      auth: oauth,
+      securitySchemes: { ...ir.securitySchemes, token: oauth },
+    };
+    expect(
+      credentialsPresent(source, source, { OAUTH_REFRESH_TOKEN: "synthetic" }),
+    ).toBe(true);
+    expect(
+      credentialsPresent(source, source, {
+        OAUTH_CLIENT_ID: "client",
+        OAUTH_CLIENT_SECRET: "synthetic",
+      }),
+    ).toBe(true);
+    expect(
+      credentialsPresent(source, source, { OAUTH_CLIENT_ID: "client" }),
+    ).toBe(false);
+    expect(
+      credentialsPresent(source, source, { OAUTH_REFRESH_TOKEN: "   " }),
+    ).toBe(false);
+  });
   it("prompts for one permitted alternative and checks OR/AND requirements", () => {
     expect(credentialRequirements(ir).map((item) => item.name)).toEqual([
       "TOKEN",

@@ -80,9 +80,12 @@ export function credentialsPresent(
     return (
       scheme.type === "oauth2" &&
       Boolean(
-        environment.OAUTH_TOKEN_URL &&
-        environment.OAUTH_CLIENT_ID &&
-        (environment.OAUTH_CLIENT_SECRET || environment.OAUTH_REFRESH_TOKEN),
+        (environment.OAUTH_TOKEN_URL?.trim() ||
+          scheme.tokenUrl?.trim() ||
+          scheme.refreshUrl?.trim()) &&
+        (environment.OAUTH_REFRESH_TOKEN?.trim() ||
+          (environment.OAUTH_CLIENT_ID?.trim() &&
+            environment.OAUTH_CLIENT_SECRET?.trim())),
       )
     );
   };
