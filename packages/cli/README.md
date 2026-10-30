@@ -2,6 +2,8 @@
 
 Generate, curate, and verify MCP servers from OpenAPI specs or documentation pages.
 
+The 2.0 release candidate requires Node.js 22.19+. It adds managed connections for Cursor, Claude Desktop, and VS Code, read-only generation, runtime-bound verification, and lifecycle diagnostics. Install with `npm install -g mcpforge@2.0.0-rc.1` only after the candidate is published; until then build the repository checkout and use `npm run dev -- <command>`.
+
 ## Common Usage
 
 Connect an OpenAPI spec to the current Cursor project:
@@ -28,7 +30,9 @@ npx mcpforge init --dry-run --optimize --workflows https://api.example.com/opena
 
 ## Commands
 
-- `mcpforge connect <spec-or-directory>` - Generate or resume a server, verify its tools, and configure Cursor. Supports `--optimize`, `--workflows`, `--pick`, and `--skip-credentials`.
+- `mcpforge connect <spec-or-directory>` - Generate or resume a server, verify its tools, and configure Cursor, Claude Desktop, or VS Code. Supports explicit `--scope`, `--config`, `--format`, `--repair`, `--read-only`, `--optimize`, `--workflows`, `--pick`, and `--skip-credentials`.
+- `mcpforge doctor --dir <project> [--json]` - Inspect files and credential presence without starting processes or making requests. Add `--verify` to install/build/launch and run mock checks explicitly.
+- `mcpforge disconnect --name <server> --client <client>` - Remove an unchanged managed client entry with a backup; preserve generated files and credentials.
 - `mcpforge init <spec>` - Parse a spec or docs URL and generate a project. Use `--optimize`, `--workflows`, `--pick`, and `--dry-run` as needed.
 - `mcpforge generate` - Regenerate from `mcpforge.config.json`, preserving saved workflow and optimization settings.
 - `mcpforge inspect <spec>` - Inspect a spec and preview workflow planning with `--workflows`.
@@ -47,4 +51,4 @@ npx mcpforge test --dir ./mcp-server-my-api
 
 Mock mode validates `listTools` input/output schemas, path/query/header construction, operation-specific authentication, OAuth token acquisition, supported body encodings, and schema-valid structured responses. Use `--live` only when the generated project has real credentials configured.
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.19 or newer. See the [2.0 guide](https://github.com/lorenzosaraiva/mcpforge/blob/main/docs/MCPFORGE-2.md) for client paths, verification levels, read-only policy, and migration.

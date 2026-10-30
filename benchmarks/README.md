@@ -2,6 +2,8 @@
 
 Three pinned task packs contain ten tasks each: GitHub, Stripe test-mode use, and a hand-authored reference commerce API. Provider requests always go to local mock upstreams during these evaluations. `pack.json` records immutable upstream commits, SHA-256 hashes, transformations, and license links. `scripts/refresh-task-packs.mjs` reproduces the checked-in excerpts from the pinned official sources.
 
+See [measured candidate results](./RESULTS.md): the final model run passed all ninety cases, with its first diagnostic run preserved for comparison.
+
 The Stripe pack explicitly targets default, unexpanded GET responses: fields annotated by Stripe as expandable are restricted to their string-ID branches, and `expand` query parameters are omitted. Expanded response graphs are outside this pack. This keeps the curated contract useful and avoids forcing every client validator to compile Stripe's entire transitive expansion graph. Do not interpret these results as support for all Stripe expansion combinations.
 
 ```sh
