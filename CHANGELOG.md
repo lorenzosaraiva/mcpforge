@@ -5,6 +5,7 @@
 ## 2.0.0-rc.1 (2026-10-29)
 
 - Added read-only `doctor` inspection and explicit mock verification with stable JSON checks, actionable repairs, and meaningful failure exit codes.
+- Bundled the internal core into the public CLI so installation requires only the `mcpforge` package, with no separately published scoped workspace dependency.
 - Bound verification to the IR, generator templates, generated source/build artifacts, and dependency lock. Older receipts require regeneration and verification.
 - Added managed Cursor, Claude Desktop, and VS Code connections with explicit scope/configuration, JSONC preservation, ownership records, moved-server repair, and safe disconnection.
 - Added read-only generation and runtime write guards, conservative MCP annotations, and policy persistence across regeneration and updates.

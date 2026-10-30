@@ -12,6 +12,11 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
+
+const {
+  values: { published },
+} = parseArgs({ options: { published: { type: "boolean", default: false } } });
 
 const root = resolve(import.meta.dirname, "..");
 const temporary = await mkdtemp(join(tmpdir(), "mcpforge-pack-"));
@@ -31,21 +36,28 @@ const run = (command, args, cwd) =>
 const runNpm = (args, cwd) => run(process.execPath, [npmCli, ...args], cwd);
 
 try {
-  runNpm(
-    ["pack", "--workspace", "@mcpforge/core", "--pack-destination", temporary],
-    root,
-  );
-  runNpm(
-    ["pack", "--workspace", "mcpforge", "--pack-destination", temporary],
-    root,
-  );
-  const coreTarball = join(temporary, `mcpforge-core-${packageVersion}.tgz`);
+  if (!published) {
+    runNpm(
+      ["pack", "--workspace", "mcpforge", "--pack-destination", temporary],
+      root,
+    );
+  }
   const tarball = join(temporary, `mcpforge-${packageVersion}.tgz`);
   await writeFile(
     join(temporary, "package.json"),
     JSON.stringify({ private: true }),
   );
-  runNpm(["install", coreTarball, tarball], temporary);
+  // Consumers install only the public CLI; a second unpublished workspace
+  // package must never be needed to resolve its runtime dependencies.
+  runNpm(
+    ["install", published ? `mcpforge@${packageVersion}` : tarball,
+      "--registry=https://registry.npmjs.org", "--prefer-online"],
+    temporary,
+  );
+  await assert.rejects(
+    access(join(temporary, "node_modules", "@mcpforge", "core")),
+    { code: "ENOENT" },
+  );
   const cli = join(temporary, "node_modules", "mcpforge", "dist", "index.js");
   const version = execFileSync(process.execPath, [cli, "--version"], {
     cwd: temporary,
@@ -390,7 +402,7 @@ try {
     ),
   );
   process.stdout.write(
-    "Packed CLI verified: fresh connect, inspection, stale code, failed build, moved server repair, client adapters, read-only regeneration, and disconnect.\n",
+    `${published ? "Published" : "Packed"} CLI verified: fresh connect, inspection, stale code, failed build, moved server repair, client adapters, read-only regeneration, and disconnect.\n`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });
