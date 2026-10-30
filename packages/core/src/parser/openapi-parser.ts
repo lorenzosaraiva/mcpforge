@@ -10,9 +10,22 @@ import type {
   SecurityRequirement,
   ToolParameter,
 } from "./types.js";
-import { inferSchemaType, toJsonSchema, toSnakeCase, truncateText } from "../utils/schema-utils.js";
+import {
+  inferSchemaType,
+  toJsonSchema,
+  toSnakeCase,
+  truncateText,
+} from "../utils/schema-utils.js";
 
-const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+const HTTP_METHODS = new Set([
+  "get",
+  "post",
+  "put",
+  "patch",
+  "delete",
+  "head",
+  "options",
+]);
 
 type OpenAPIDocument = Record<string, unknown>;
 type OpenAPIPathItem = Record<string, unknown>;
@@ -71,8 +84,9 @@ function resolveSwagger2BaseUrl(document: OpenAPIDocument): string | undefined {
   const schemes = asStringArray(document.schemes)
     .map((scheme) => scheme.trim().toLowerCase())
     .filter(Boolean);
-  const scheme = schemes.includes("https") ? "https" : schemes[0] ?? "https";
-  const basePath = typeof document.basePath === "string" ? document.basePath.trim() : "";
+  const scheme = schemes.includes("https") ? "https" : (schemes[0] ?? "https");
+  const basePath =
+    typeof document.basePath === "string" ? document.basePath.trim() : "";
 
   if (!basePath) {
     return `${scheme}://${host}`;
@@ -105,15 +119,22 @@ function resolveApiName(document: OpenAPIDocument): string {
 
 function resolveApiDescription(document: OpenAPIDocument): string {
   const info = asRecord(document.info);
-  const parts = [info.summary, info.description].filter((item): item is string => typeof item === "string");
+  const parts = [info.summary, info.description].filter(
+    (item): item is string => typeof item === "string",
+  );
   if (parts.length === 0) {
     return "Generated MCP server from OpenAPI specification.";
   }
   return truncateText(parts.join(" "), 420);
 }
 
-function normalizeToolName(operationId: string | undefined, method: string, path: string): string {
-  const raw = operationId && operationId.trim() ? operationId : `${method}_${path}`;
+function normalizeToolName(
+  operationId: string | undefined,
+  method: string,
+  path: string,
+): string {
+  const raw =
+    operationId && operationId.trim() ? operationId : `${method}_${path}`;
   const fromPath = raw.replace(/[{}]/g, "").replace(/\//g, "_");
   return toSnakeCase(fromPath);
 }
@@ -123,46 +144,64 @@ interface SelectedResponse {
   response: Record<string, unknown>;
 }
 
-function selectSuccessResponse(operation: OpenAPIOperation): SelectedResponse | undefined {
+function selectSuccessResponse(
+  operation: OpenAPIOperation,
+): SelectedResponse | undefined {
   const responses = asRecord(operation.responses);
   const entries = Object.entries(responses);
   const successCandidates = [
     ...entries.filter(([status]) => status === "200"),
-    ...entries.filter(([status]) => status !== "200" && (/^2\d\d$/.test(status) || /^2XX$/i.test(status))),
+    ...entries.filter(
+      ([status]) =>
+        status !== "200" && (/^2\d\d$/.test(status) || /^2XX$/i.test(status)),
+    ),
   ];
-  const candidates = successCandidates.length > 0
-    ? successCandidates
-    : entries.filter(([status]) => status === "default");
+  const candidates =
+    successCandidates.length > 0
+      ? successCandidates
+      : entries.filter(([status]) => status === "default");
 
   for (const [statusCode, response] of candidates) {
     const responseObject = asRecord(response);
     const content = asRecord(responseObject.content);
     const hasOpenApiSchema = Object.values(content).some(
-      (mediaType) => Object.keys(asRecord(asRecord(mediaType).schema)).length > 0,
+      (mediaType) =>
+        Object.keys(asRecord(asRecord(mediaType).schema)).length > 0,
     );
-    const hasSwaggerSchema = Object.keys(asRecord(responseObject.schema)).length > 0;
+    const hasSwaggerSchema =
+      Object.keys(asRecord(responseObject.schema)).length > 0;
     if (hasOpenApiSchema || hasSwaggerSchema) {
       return { statusCode, response: responseObject };
     }
   }
 
   const fallback = candidates[0];
-  return fallback ? { statusCode: fallback[0], response: asRecord(fallback[1]) } : undefined;
+  return fallback
+    ? { statusCode: fallback[0], response: asRecord(fallback[1]) }
+    : undefined;
 }
 
-function resolveResponseDescription(operation: OpenAPIOperation): string | undefined {
+function resolveResponseDescription(
+  operation: OpenAPIOperation,
+): string | undefined {
   const selected = selectSuccessResponse(operation);
   if (!selected) {
     return undefined;
   }
   const responseObject = selected.response;
-  if (typeof responseObject.description === "string" && responseObject.description.trim()) {
+  if (
+    typeof responseObject.description === "string" &&
+    responseObject.description.trim()
+  ) {
     return truncateText(responseObject.description, 200);
   }
   return undefined;
 }
 
-function resolveProduces(document: OpenAPIDocument, operation: OpenAPIOperation): string[] {
+function resolveProduces(
+  document: OpenAPIDocument,
+  operation: OpenAPIOperation,
+): string[] {
   const operationProduces = asStringArray(operation.produces)
     .map((value) => value.trim())
     .filter(Boolean);
@@ -185,7 +224,8 @@ function mapResponse(
   }
 
   const description =
-    typeof selected.response.description === "string" && selected.response.description.trim()
+    typeof selected.response.description === "string" &&
+    selected.response.description.trim()
       ? truncateText(selected.response.description, 200)
       : undefined;
   const content = asRecord(selected.response.content);
@@ -198,8 +238,12 @@ function mapResponse(
 
   if (contentTypes.length > 0) {
     const preferred =
-      contentTypes.find((entry) => entry.contentType.toLowerCase() === "application/json") ??
-      contentTypes.find((entry) => entry.contentType.toLowerCase().endsWith("+json")) ??
+      contentTypes.find(
+        (entry) => entry.contentType.toLowerCase() === "application/json",
+      ) ??
+      contentTypes.find((entry) =>
+        entry.contentType.toLowerCase().endsWith("+json"),
+      ) ??
       contentTypes[0];
     if (!preferred) {
       return undefined;
@@ -228,13 +272,19 @@ function mapResponse(
   return {
     statusCode: selected.statusCode,
     contentType,
-    contentTypes: produces.map((value) => ({ contentType: value, schema: swaggerSchema })),
+    contentTypes: produces.map((value) => ({
+      contentType: value,
+      schema: swaggerSchema,
+    })),
     schema: swaggerSchema,
     description,
   };
 }
 
-function mergeParameters(pathParameters: unknown, operationParameters: unknown): OpenAPIParameter[] {
+function mergeParameters(
+  pathParameters: unknown,
+  operationParameters: unknown,
+): OpenAPIParameter[] {
   const merged = new Map<string, OpenAPIParameter>();
   const pushParameter = (candidate: unknown): void => {
     const parameter = asRecord(candidate);
@@ -257,7 +307,9 @@ function mergeParameters(pathParameters: unknown, operationParameters: unknown):
   return [...merged.values()];
 }
 
-function extractParameterSchema(parameter: OpenAPIParameter): Record<string, unknown> {
+function extractParameterSchema(
+  parameter: OpenAPIParameter,
+): Record<string, unknown> {
   const schema = asRecord(parameter.schema);
   if (Object.keys(schema).length > 0) {
     return schema;
@@ -285,10 +337,15 @@ function extractParameterSchema(parameter: OpenAPIParameter): Record<string, unk
   return fallback;
 }
 
-function mapParameterToToolParameter(parameter: OpenAPIParameter): ToolParameter | null {
+function mapParameterToToolParameter(
+  parameter: OpenAPIParameter,
+): ToolParameter | null {
   const location = parameter.in;
   const name = parameter.name;
-  if ((location !== "path" && location !== "query" && location !== "header") || typeof name !== "string") {
+  if (
+    (location !== "path" && location !== "query" && location !== "header") ||
+    typeof name !== "string"
+  ) {
     return null;
   }
 
@@ -317,7 +374,10 @@ function mapParameterToToolParameter(parameter: OpenAPIParameter): ToolParameter
   return mapped;
 }
 
-function resolveConsumes(document: OpenAPIDocument, operation: OpenAPIOperation): string[] {
+function resolveConsumes(
+  document: OpenAPIDocument,
+  operation: OpenAPIOperation,
+): string[] {
   const operationConsumes = asStringArray(operation.consumes)
     .map((value) => value.trim())
     .filter(Boolean);
@@ -330,12 +390,15 @@ function resolveConsumes(document: OpenAPIDocument, operation: OpenAPIOperation)
     .filter(Boolean);
 }
 
-function buildSwagger2FormDataSchema(parameters: OpenAPIParameter[]): Record<string, unknown> {
+function buildSwagger2FormDataSchema(
+  parameters: OpenAPIParameter[],
+): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
   for (const parameter of parameters) {
-    const name = typeof parameter.name === "string" ? parameter.name : undefined;
+    const name =
+      typeof parameter.name === "string" ? parameter.name : undefined;
     if (!name) {
       continue;
     }
@@ -368,7 +431,9 @@ function mapRequestBody(
   const contentTypes = Object.keys(content);
 
   if (contentTypes.length > 0) {
-    const preferredType = contentTypes.includes("application/json") ? "application/json" : contentTypes[0];
+    const preferredType = contentTypes.includes("application/json")
+      ? "application/json"
+      : contentTypes[0];
     if (!preferredType) {
       return undefined;
     }
@@ -383,19 +448,25 @@ function mapRequestBody(
       schema: toJsonSchema(mediaType.schema),
       required: requestBody.required === true,
       description:
-        typeof requestBody.description === "string" && requestBody.description.trim()
+        typeof requestBody.description === "string" &&
+        requestBody.description.trim()
           ? truncateText(requestBody.description, 180)
           : undefined,
     };
   }
 
-  const bodyParameter = mergedParameters.find((parameter) => parameter.in === "body");
+  const bodyParameter = mergedParameters.find(
+    (parameter) => parameter.in === "body",
+  );
   if (bodyParameter) {
     const consumes = resolveConsumes(document, operation);
-    const contentType = consumes.includes("application/json") ? "application/json" : consumes[0] ?? "application/json";
+    const contentType = consumes.includes("application/json")
+      ? "application/json"
+      : (consumes[0] ?? "application/json");
     const schema = toJsonSchema(extractParameterSchema(bodyParameter));
     const description =
-      typeof bodyParameter.description === "string" && bodyParameter.description.trim()
+      typeof bodyParameter.description === "string" &&
+      bodyParameter.description.trim()
         ? truncateText(bodyParameter.description, 180)
         : undefined;
 
@@ -407,19 +478,25 @@ function mapRequestBody(
     };
   }
 
-  const formDataParameters = mergedParameters.filter((parameter) => parameter.in === "formData");
+  const formDataParameters = mergedParameters.filter(
+    (parameter) => parameter.in === "formData",
+  );
   if (formDataParameters.length > 0) {
     const consumes = resolveConsumes(document, operation);
     const contentType =
       consumes.find((value) => value.toLowerCase() === "multipart/form-data") ??
-      consumes.find((value) => value.toLowerCase() === "application/x-www-form-urlencoded") ??
+      consumes.find(
+        (value) => value.toLowerCase() === "application/x-www-form-urlencoded",
+      ) ??
       consumes[0] ??
       "application/x-www-form-urlencoded";
 
     return {
       contentType,
       schema: buildSwagger2FormDataSchema(formDataParameters),
-      required: formDataParameters.some((parameter) => parameter.required === true),
+      required: formDataParameters.some(
+        (parameter) => parameter.required === true,
+      ),
       description: "Generated from Swagger 2.0 formData parameters.",
     };
   }
@@ -427,7 +504,9 @@ function mapRequestBody(
   return undefined;
 }
 
-function resolveSecuritySchemes(document: OpenAPIDocument): Record<string, unknown> {
+function resolveSecuritySchemes(
+  document: OpenAPIDocument,
+): Record<string, unknown> {
   const components = asRecord(document.components);
   const openApi3Schemes = asRecord(components.securitySchemes);
   if (Object.keys(openApi3Schemes).length > 0) {
@@ -467,12 +546,16 @@ function parseSecurityRequirements(
   const requirements: SecurityRequirement[] = [];
   for (const candidate of security) {
     const requirementObject = asRecord(candidate);
-    const requirementSchemes = Object.entries(requirementObject)
-      .map(([name, scopes]) => ({
+    const requirementSchemes = Object.entries(requirementObject).map(
+      ([name, scopes]) => ({
         scheme: name,
         scopes: asStringArray(scopes),
-      }));
-    if (requirementSchemes.length > 0 || Object.keys(requirementObject).length === 0) {
+      }),
+    );
+    if (
+      requirementSchemes.length > 0 ||
+      Object.keys(requirementObject).length === 0
+    ) {
       requirements.push({ schemes: requirementSchemes });
     }
   }
@@ -536,7 +619,8 @@ function buildOAuthFlow(
   const flow: OAuthFlowConfig = {
     type: normalizeOAuthFlowName(flowName),
     authorizationUrl:
-      typeof flowObject.authorizationUrl === "string" && flowObject.authorizationUrl.trim()
+      typeof flowObject.authorizationUrl === "string" &&
+      flowObject.authorizationUrl.trim()
         ? flowObject.authorizationUrl.trim()
         : undefined,
     tokenUrl:
@@ -567,7 +651,10 @@ function extractOAuthFlows(scheme: Record<string, unknown>): OAuthFlowConfig[] {
     return flows;
   }
 
-  const swagger2FlowName = typeof scheme.flow === "string" && scheme.flow.trim() ? scheme.flow.trim() : undefined;
+  const swagger2FlowName =
+    typeof scheme.flow === "string" && scheme.flow.trim()
+      ? scheme.flow.trim()
+      : undefined;
   if (!swagger2FlowName) {
     return [];
   }
@@ -593,8 +680,12 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   const schemes = resolveSecuritySchemes(document);
   const schemeNames = Object.keys(schemes);
   const hasSecuritySchemes = schemeNames.length > 0;
-  const globalSecurity = Array.isArray(document.security) ? document.security : undefined;
-  const hasGlobalSecurityRequirement = Boolean(globalSecurity && globalSecurity.length > 0);
+  const globalSecurity = Array.isArray(document.security)
+    ? document.security
+    : undefined;
+  const hasGlobalSecurityRequirement = Boolean(
+    globalSecurity && globalSecurity.length > 0,
+  );
   const operationSecurityArrays = collectOperationSecurityArrays(document);
   const hasOperationSecurityRequirement = operationSecurityArrays.some(
     (security) => Array.isArray(security) && security.length > 0,
@@ -602,7 +693,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   const hasOperationNoAuthOverride = operationSecurityArrays.some(
     (security) => Array.isArray(security) && security.length === 0,
   );
-  const hasAnySecurityRequirement = hasGlobalSecurityRequirement || hasOperationSecurityRequirement;
+  const hasAnySecurityRequirement =
+    hasGlobalSecurityRequirement || hasOperationSecurityRequirement;
   const authRequired = hasAnySecurityRequirement && !hasOperationNoAuthOverride;
 
   let selectedSchemeName = pickSecuritySchemeName(schemes, globalSecurity);
@@ -638,7 +730,8 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
 
   if (scheme.type === "apiKey") {
     const inField = scheme.in;
-    const parameterName = typeof scheme.name === "string" ? scheme.name : "X-API-Key";
+    const parameterName =
+      typeof scheme.name === "string" ? scheme.name : "X-API-Key";
     const location =
       inField === "query" || inField === "cookie" ? inField : "header";
     return {
@@ -719,13 +812,16 @@ function detectAuthConfig(document: OpenAPIDocument): AuthConfig {
   return {
     type: "none",
     envVarName: "NO_AUTH",
-    description: "Unsupported authentication scheme detected. Continuing without auth.",
+    description:
+      "Unsupported authentication scheme detected. Continuing without auth.",
     required: false,
     hasSecuritySchemes,
   };
 }
 
-function detectSecuritySchemes(document: OpenAPIDocument): Record<string, AuthConfig> {
+function detectSecuritySchemes(
+  document: OpenAPIDocument,
+): Record<string, AuthConfig> {
   const schemes = resolveSecuritySchemes(document);
   const result: Record<string, AuthConfig> = {};
 
@@ -763,21 +859,55 @@ function convertOperationToTool(
   operation: OpenAPIOperation,
 ): EndpointToolDefinition {
   const operationId =
-    typeof operation.operationId === "string" && operation.operationId.trim() ? operation.operationId.trim() : undefined;
+    typeof operation.operationId === "string" && operation.operationId.trim()
+      ? operation.operationId.trim()
+      : undefined;
   const name = normalizeToolName(operationId, method, path);
 
-  const summary = typeof operation.summary === "string" ? operation.summary.trim() : "";
-  const description = typeof operation.description === "string" ? operation.description.trim() : "";
+  const summary =
+    typeof operation.summary === "string" ? operation.summary.trim() : "";
+  const description =
+    typeof operation.description === "string"
+      ? operation.description.trim()
+      : "";
   const descriptionParts = [summary, description].filter(Boolean);
   const resolvedDescription =
     descriptionParts.length > 0
       ? truncateText(descriptionParts.join(" "), 260)
       : truncateText(`${method.toUpperCase()} ${path}`, 260);
 
-  const mergedParameters = mergeParameters(pathItem.parameters, operation.parameters);
+  const mergedParameters = mergeParameters(
+    pathItem.parameters,
+    operation.parameters,
+  );
   const mappedParameters = mergedParameters
     .map((parameter) => mapParameterToToolParameter(parameter))
     .filter((parameter): parameter is ToolParameter => Boolean(parameter));
+  let requestBody = mapRequestBody(document, operation, mergedParameters);
+  // Some providers declare an optional, closed empty form body on every GET.
+  // Fetch forbids GET/HEAD bodies; an empty declaration carries no input.
+  if (
+    ["get", "head"].includes(method.toLowerCase()) &&
+    requestBody &&
+    !requestBody.required
+  ) {
+    const schemas = requestBody.contentTypes?.map((entry) => entry.schema) ?? [
+      requestBody.schema,
+    ];
+    if (
+      schemas.every(
+        (schema) =>
+          schema.type === "object" &&
+          schema.additionalProperties === false &&
+          Object.keys(asRecord(schema.properties)).length === 0 &&
+          !schema.allOf &&
+          !schema.anyOf &&
+          !schema.oneOf,
+      )
+    ) {
+      requestBody = undefined;
+    }
+  }
 
   const tool: EndpointToolDefinition = {
     kind: "endpoint",
@@ -786,26 +916,37 @@ function convertOperationToTool(
     method: method.toUpperCase(),
     path,
     baseUrl:
-      (Array.isArray(operation.servers) ? operation.servers.map(resolveServerObjectUrl).find(Boolean) : undefined) ??
-      (Array.isArray(pathItem.servers) ? pathItem.servers.map(resolveServerObjectUrl).find(Boolean) : undefined),
+      (Array.isArray(operation.servers)
+        ? operation.servers.map(resolveServerObjectUrl).find(Boolean)
+        : undefined) ??
+      (Array.isArray(pathItem.servers)
+        ? pathItem.servers.map(resolveServerObjectUrl).find(Boolean)
+        : undefined),
     parameters: mappedParameters,
-    requestBody: mapRequestBody(document, operation, mergedParameters),
+    requestBody,
     response: mapResponse(document, operation),
     responseDescription: resolveResponseDescription(operation),
     tags: asStringArray(operation.tags),
     originalOperationId: operationId,
-    securityRequirements: resolveOperationSecurityRequirements(document, operation),
+    securityRequirements: resolveOperationSecurityRequirements(
+      document,
+      operation,
+    ),
   };
 
   return tool;
 }
 
-export async function parseOpenAPISpec(specSource: string): Promise<MCPForgeIR> {
+export async function parseOpenAPISpec(
+  specSource: string,
+): Promise<MCPForgeIR> {
   const parser = new SwaggerParser();
 
   try {
     await parser.validate(specSource);
-    const dereferenced = (await parser.dereference(specSource)) as OpenAPIDocument;
+    const dereferenced = (await parser.dereference(
+      specSource,
+    )) as OpenAPIDocument;
     const paths = asRecord(dereferenced.paths);
 
     const tools: EndpointToolDefinition[] = [];
@@ -818,7 +959,15 @@ export async function parseOpenAPISpec(specSource: string): Promise<MCPForgeIR> 
           continue;
         }
         const operation = asRecord(operationRaw);
-        tools.push(convertOperationToTool(dereferenced, method, path, pathItem, operation));
+        tools.push(
+          convertOperationToTool(
+            dereferenced,
+            method,
+            path,
+            pathItem,
+            operation,
+          ),
+        );
         rawEndpointCount += 1;
       }
     }
@@ -838,7 +987,8 @@ export async function parseOpenAPISpec(specSource: string): Promise<MCPForgeIR> 
       rawEndpointCount,
     };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "Unknown parser error";
+    const reason =
+      error instanceof Error ? error.message : "Unknown parser error";
     throw new Error(`Failed to parse OpenAPI spec "${specSource}": ${reason}`);
   }
 }

@@ -4,10 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import ts from "typescript";
+import { transformSync } from "esbuild";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AuthConfig, EndpointToolDefinition, MCPForgeIR } from "../parser/types.js";
+import type {
+  AuthConfig,
+  EndpointToolDefinition,
+  MCPForgeIR,
+} from "../parser/types.js";
 import { generateTypeScriptMCPServer } from "./typescript-generator.js";
 
 const tempDirs: string[] = [];
@@ -26,22 +30,23 @@ function createIR(
   };
 }
 
-async function transpileGeneratedModule(rootDir: string, relativePath: string): Promise<void> {
+async function transpileGeneratedModule(
+  rootDir: string,
+  relativePath: string,
+): Promise<void> {
   const sourcePath = join(rootDir, relativePath);
   const outputPath = join(
     rootDir,
     relativePath.replace(/^src[\\/]/, "").replace(/\.ts$/, ".js"),
   );
   const source = await readFile(sourcePath, "utf8");
-  const transpiled = ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ES2022,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    },
-    fileName: sourcePath,
+  const transpiled = transformSync(source, {
+    loader: "ts",
+    format: "esm",
+    target: "es2022",
+    sourcefile: sourcePath,
   });
-  await writeFile(outputPath, transpiled.outputText, "utf8");
+  await writeFile(outputPath, transpiled.code, "utf8");
 }
 
 async function importRuntimeModules(rootDir: string): Promise<{
@@ -50,18 +55,27 @@ async function importRuntimeModules(rootDir: string): Promise<{
     input: Record<string, unknown>,
     context: Record<string, unknown>,
   ) => Promise<unknown>;
-  resolveAuthState: (authConfig: Record<string, unknown>) => { auth: Record<string, unknown> };
+  resolveAuthState: (authConfig: Record<string, unknown>) => {
+    auth: Record<string, unknown>;
+  };
   resolveSecurityAuth: (
-    requirements: Array<{ schemes: Array<{ scheme: string; scopes: string[] }> }>,
+    requirements: Array<{
+      schemes: Array<{ scheme: string; scopes: string[] }>;
+    }>,
     schemes: Record<string, AuthConfig>,
     endpointName: string,
-  ) => Promise<{ headers: Record<string, string>; queryParams: Record<string, string> }>;
+  ) => Promise<{
+    headers: Record<string, string>;
+    queryParams: Record<string, string>;
+  }>;
   AUTH_CONFIG: Record<string, unknown>;
 }> {
   await transpileGeneratedModule(rootDir, join("src", "resilience.ts"));
   await transpileGeneratedModule(rootDir, join("src", "runtime.ts"));
 
-  const runtimeModule = await import(pathToFileURL(join(rootDir, "runtime.js")).href);
+  const runtimeModule = await import(
+    pathToFileURL(join(rootDir, "runtime.js")).href
+  );
   if (!existsSync(join(rootDir, "src", "auth.ts"))) {
     return {
       invokeEndpoint: runtimeModule.invokeEndpoint,
@@ -93,7 +107,9 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
   delete process.env.API_KEY;
   delete process.env.ACCESS_TOKEN;
   delete process.env.OAUTH_TOKEN_URL;
@@ -105,25 +121,97 @@ afterEach(async () => {
 });
 
 describe("generated runtime", () => {
+  it("blocks write requests before auth resolution or fetch when read-only mode is enabled", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-runtime-policy-"));
+    tempDirs.push(outputDir);
+    const tool: EndpointToolDefinition = {
+      kind: "endpoint",
+      name: "delete_item",
+      method: "DELETE",
+      path: "/items",
+      parameters: [],
+      tags: [],
+    };
+    await generateTypeScriptMCPServer(
+      createIR(tool, { type: "none", envVarName: "NONE" }),
+      { outputDir },
+    );
+    const { invokeEndpoint } = await importRuntimeModules(outputDir);
+    const fetch = vi.spyOn(globalThis, "fetch");
+    const resolveAuth = vi.fn();
+    await expect(
+      invokeEndpoint(
+        {
+          method: "DELETE",
+          path: "/items",
+          pathParams: [],
+          queryParams: [],
+          headerParams: [],
+        },
+        {},
+        { baseUrl: "https://example.invalid", readOnly: true, resolveAuth },
+      ),
+    ).rejects.toThrow("read-only");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(resolveAuth).not.toHaveBeenCalled();
+  });
   it("resolves operation-specific public, alternative, and combined auth", async () => {
     const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-runtime-"));
     tempDirs.push(outputDir);
     const tool: EndpointToolDefinition = {
-      kind: "endpoint", name: "mixed", description: "Mixed auth", method: "GET", path: "/mixed", parameters: [], tags: [],
-      securityRequirements: [{ schemes: [{ scheme: "headerKey", scopes: [] }, { scheme: "tenantKey", scopes: [] }] }],
+      kind: "endpoint",
+      name: "mixed",
+      description: "Mixed auth",
+      method: "GET",
+      path: "/mixed",
+      parameters: [],
+      tags: [],
+      securityRequirements: [
+        {
+          schemes: [
+            { scheme: "headerKey", scopes: [] },
+            { scheme: "tenantKey", scopes: [] },
+          ],
+        },
+      ],
     };
-    const ir = createIR(tool, { type: "api-key", envVarName: "HEADER_KEY_CREDENTIAL", required: true });
+    const ir = createIR(tool, {
+      type: "api-key",
+      envVarName: "HEADER_KEY_CREDENTIAL",
+      required: true,
+    });
     ir.irVersion = 2;
     ir.securitySchemes = {
-      headerKey: { type: "api-key", envVarName: "HEADER_KEY_CREDENTIAL", parameterName: "X-API-Key", headerName: "X-API-Key", location: "header", required: true },
-      tenantKey: { type: "api-key", envVarName: "TENANT_KEY_CREDENTIAL", parameterName: "tenant_key", location: "query", required: true },
+      headerKey: {
+        type: "api-key",
+        envVarName: "HEADER_KEY_CREDENTIAL",
+        parameterName: "X-API-Key",
+        headerName: "X-API-Key",
+        location: "header",
+        required: true,
+      },
+      tenantKey: {
+        type: "api-key",
+        envVarName: "TENANT_KEY_CREDENTIAL",
+        parameterName: "tenant_key",
+        location: "query",
+        required: true,
+      },
     };
     await generateTypeScriptMCPServer(ir, { outputDir });
     const { resolveSecurityAuth } = await importRuntimeModules(outputDir);
-    expect(await resolveSecurityAuth([], ir.securitySchemes, "public")).toEqual({ headers: {}, queryParams: {} });
+    expect(await resolveSecurityAuth([], ir.securitySchemes, "public")).toEqual(
+      { headers: {}, queryParams: {} },
+    );
     process.env.HEADER_KEY_CREDENTIAL = "header-secret";
     process.env.TENANT_KEY_CREDENTIAL = "tenant-secret";
-    expect(await resolveSecurityAuth(tool.securityRequirements ?? [], ir.securitySchemes, "mixed")).toEqual({
+    expect(
+      await resolveSecurityAuth(
+        tool.securityRequirements ?? [],
+        ir.securitySchemes,
+        "mixed",
+      ),
+    ).toEqual({
       headers: { "X-API-Key": "header-secret" },
       queryParams: { tenant_key: "tenant-secret" },
     });
@@ -166,24 +254,32 @@ describe("generated runtime", () => {
       },
     );
 
-    const { invokeEndpoint, resolveAuthState, AUTH_CONFIG } = await importRuntimeModules(outputDir);
+    const { invokeEndpoint, resolveAuthState, AUTH_CONFIG } =
+      await importRuntimeModules(outputDir);
     process.env.API_KEY = "secret-token";
 
-    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
-      const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      return new Response(
-        JSON.stringify({
-          url: requestUrl,
-          headers: init?.headers,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
+    const fetchMock = vi.fn(
+      async (input: URL | RequestInfo, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        return new Response(
+          JSON.stringify({
+            url: requestUrl,
+            headers: init?.headers,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        },
-      );
-    });
+        );
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await invokeEndpoint(
@@ -261,20 +357,22 @@ describe("generated runtime", () => {
 
     const { invokeEndpoint } = await importRuntimeModules(outputDir);
 
-    const fetchMock = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
-      return new Response(
-        JSON.stringify({
-          body: init?.body,
-          headers: init?.headers,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
+    const fetchMock = vi.fn(
+      async (_input: URL | RequestInfo, init?: RequestInit) => {
+        return new Response(
+          JSON.stringify({
+            body: init?.body,
+            headers: init?.headers,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        },
-      );
-    });
+        );
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await invokeEndpoint(
@@ -359,29 +457,31 @@ describe("generated runtime", () => {
 
     const { invokeEndpoint } = await importRuntimeModules(outputDir);
 
-    const fetchMock = vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
-      const body = init?.body;
-      expect(body).toBeInstanceOf(FormData);
+    const fetchMock = vi.fn(
+      async (_input: URL | RequestInfo, init?: RequestInit) => {
+        const body = init?.body;
+        expect(body).toBeInstanceOf(FormData);
 
-      const formData = body as FormData;
-      const name = formData.get("name");
-      const file = formData.get("file");
+        const formData = body as FormData;
+        const name = formData.get("name");
+        const file = formData.get("file");
 
-      return new Response(
-        JSON.stringify({
-          name,
-          fileName: file instanceof File ? file.name : undefined,
-          fileType: file instanceof File ? file.type : undefined,
-          headers: init?.headers,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
+        return new Response(
+          JSON.stringify({
+            name,
+            fileName: file instanceof File ? file.name : undefined,
+            fileType: file instanceof File ? file.type : undefined,
+            headers: init?.headers,
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        },
-      );
-    });
+        );
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await invokeEndpoint(
@@ -464,20 +564,42 @@ describe("generated runtime", () => {
       },
     );
 
-    const { invokeEndpoint, resolveAuthState, AUTH_CONFIG } = await importRuntimeModules(outputDir);
+    const { invokeEndpoint, resolveAuthState, AUTH_CONFIG } =
+      await importRuntimeModules(outputDir);
     process.env.OAUTH_CLIENT_ID = "client-id";
     process.env.OAUTH_CLIENT_SECRET = "client-secret";
 
-    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
-      const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      if (requestUrl === "https://auth.example.com/oauth/token") {
-        expect(init?.method).toBe("POST");
-        expect(init?.body).toBe("grant_type=client_credentials&client_id=client-id&client_secret=client-secret&scope=customers%3Aread");
+    const fetchMock = vi.fn(
+      async (input: URL | RequestInfo, init?: RequestInit) => {
+        const requestUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        if (requestUrl === "https://auth.example.com/oauth/token") {
+          expect(init?.method).toBe("POST");
+          expect(init?.body).toBe(
+            "grant_type=client_credentials&client_id=client-id&client_secret=client-secret&scope=customers%3Aread",
+          );
+          return new Response(
+            JSON.stringify({
+              access_token: "oauth-access-token",
+              token_type: "Bearer",
+              expires_in: 3600,
+            }),
+            {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json",
+              },
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({
-            access_token: "oauth-access-token",
-            token_type: "Bearer",
-            expires_in: 3600,
+            headers: init?.headers,
           }),
           {
             status: 200,
@@ -486,20 +608,8 @@ describe("generated runtime", () => {
             },
           },
         );
-      }
-
-      return new Response(
-        JSON.stringify({
-          headers: init?.headers,
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    });
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await invokeEndpoint(

@@ -6,7 +6,6 @@ export interface OptimizationOptions {
   apiKey?: string;
   model?: string;
   maxTokens?: number;
-  temperature?: number;
   mode?: OptimizerMode;
   maxTools?: number;
   maxEndpointsForOptimization?: number;

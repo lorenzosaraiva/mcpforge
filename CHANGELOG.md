@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.0.0-rc.1 (2026-10-29)
+
+- Added read-only `doctor` inspection and explicit mock verification with stable JSON checks, actionable repairs, and meaningful failure exit codes.
+- Bound verification to the IR, generator templates, generated source/build artifacts, and dependency lock. Older receipts require regeneration and verification.
+- Added managed Cursor, Claude Desktop, and VS Code connections with explicit scope/configuration, JSONC preservation, ownership records, moved-server repair, and safe disconnection.
+- Added read-only generation and runtime write guards, conservative MCP annotations, and policy persistence across regeneration and updates.
+- Migrated to Node 22.19+, TypeScript 7, Vitest 5, tsup 9, swagger-parser 13, Commander 15, and Anthropic SDK 1. Removed the retired Messages temperature parameter and added mocked AI contract tests.
+- Added pinned API task packs and bounded contract/model evaluation tooling. Real client onboarding and end-to-end user task validation remain release gates.
+- Fixed shared/cyclic schema graphs and nested response references, empty optional GET bodies, and mock samples for nullable enums, required fields, and path patterns. Workflow names now follow nested path resources and preserve operation descriptions.
+- Expanded CI to Linux, Windows, and macOS on Node 22.19, 24, and 26, with packaged lifecycle and task-pack contract checks.
+
 ## 1.2.0 (2026-10-29)
 
 - Added `mcpforge connect` to generate or resume a server, verify it against a mock upstream, collect credentials, and register it in a Cursor project with preview, backup, and collision handling.

@@ -8,6 +8,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   type CallToolResult,
+  type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
 {{#if hasAuth}}
@@ -22,6 +23,7 @@ const SERVER_VERSION = "0.1.0";
 const DEFAULT_API_BASE_URL = {{{json baseUrl}}};
 const API_BASE_URL_OVERRIDE = process.env.API_BASE_URL?.trim();
 const API_BASE_URL = API_BASE_URL_OVERRIDE || DEFAULT_API_BASE_URL;
+const READ_ONLY = {{#if readOnly}}true{{else}}false{{/if}} || process.env.MCPFORGE_READ_ONLY === "1";
 {{#if hasAuth}}
 const RESOLVE_AUTH = (requirements: import("./runtime.js").SecurityRequirement[], endpointName: string) =>
   resolveSecurityAuth(requirements, SECURITY_SCHEMES, endpointName);
@@ -29,12 +31,13 @@ const RESOLVE_AUTH = (requirements: import("./runtime.js").SecurityRequirement[]
 const RESOLVE_AUTH = async () => ({ headers: {}, queryParams: {} });
 {{/if}}
 
-const TOOL_DEFINITIONS = [
+const TOOL_DEFINITIONS: Tool[] = [
 {{#each tools}}
   {
     name: {{{json this.name}}},
     description: {{{json this.description}}},
     inputSchema: {{{json this.inputSchema}}},
+    annotations: {{{json this.annotations}}},
 {{#if this.outputSchema}}
     outputSchema: {{{json this.outputSchema}}},
 {{/if}}
@@ -50,6 +53,7 @@ const TOOL_HANDLERS: Record<string, (input: Record<string, unknown>) => Promise<
     {{this.handlerFunctionName}}(input, {
       baseUrl: API_BASE_URL,
       forceBaseUrl: Boolean(API_BASE_URL_OVERRIDE),
+      readOnly: READ_ONLY,
       resolveAuth: RESOLVE_AUTH,
     }){{#unless @last}},{{/unless}}
 {{/each}}
@@ -69,7 +73,7 @@ const server = new Server(
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: TOOL_DEFINITIONS,
+    tools: TOOL_DEFINITIONS.filter((tool) => !READ_ONLY || tool.annotations?.readOnlyHint),
   };
 });
 
@@ -82,7 +86,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       : {};
   const toolHandler = TOOL_HANDLERS[toolName];
 
-  if (!toolHandler) {
+  if (!toolHandler || (READ_ONLY && !TOOL_DEFINITIONS.find((tool) => tool.name === toolName)?.annotations?.readOnlyHint)) {
     return {
       isError: true,
       content: [

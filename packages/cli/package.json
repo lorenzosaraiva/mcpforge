@@ -1,6 +1,6 @@
 {
   "name": "mcpforge",
-  "version": "1.2.0",
+  "version": "2.0.0-rc.1",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -14,27 +14,30 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && tsup --config tsup.config.ts && node ./scripts/copy-templates.mjs",
     "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.132.1",
-    "@apidevtools/swagger-parser": "^12.1.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@apidevtools/swagger-parser": "^13.1.0",
     "@clack/prompts": "^1.8.1",
-    "@mcpforge/core": "1.2.0",
-    "commander": "^14.0.3",
+    "@mcpforge/core": "2.0.0-rc.1",
+    "commander": "^15.0.0",
     "cross-spawn": "^7.0.6",
     "handlebars": "^4.7.10",
-    "zod": "^4.6.6"
+    "zod": "^4.6.6",
+    "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/node": "^26.6.5",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }

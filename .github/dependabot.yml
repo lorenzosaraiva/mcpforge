@@ -4,8 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # Revisit these together with the Node support/toolchain migration.
-    # The next majors require Node 22+ or remove the compiler API used by tests.
+    # 2.0 completed the Node 22.19+, TypeScript 7, and Anthropic 1.x migration.
+    # Review subsequent breaking toolchain/API upgrades deliberately; patches
+    # and minors continue through the grouped maintenance PRs below.
     ignore:
       - dependency-name: "@anthropic-ai/sdk"
         update-types: ["version-update:semver-major"]

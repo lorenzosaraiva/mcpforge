@@ -3,6 +3,9 @@ import { join } from "node:path";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv-provider.js";
+import { Ajv } from "ajv";
+import addFormatsModule from "ajv-formats";
 
 export interface MCPServerConnection {
   client: Client;
@@ -10,7 +13,9 @@ export interface MCPServerConnection {
   getStderrOutput: () => string;
 }
 
-function collectEnvironment(overrides?: Record<string, string>): Record<string, string> {
+function collectEnvironment(
+  overrides?: Record<string, string>,
+): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -48,7 +53,9 @@ export async function connectToMCPServer(
 
   let stderrOutput = "";
   const stderrStream = transport.stderr as
-    | (NodeJS.ReadableStream & { setEncoding?: (encoding: BufferEncoding) => void })
+    | (NodeJS.ReadableStream & {
+        setEncoding?: (encoding: BufferEncoding) => void;
+      })
     | null;
 
   stderrStream?.setEncoding?.("utf8");
@@ -59,6 +66,21 @@ export async function connectToMCPServer(
     }
   });
 
+  const ajv = new Ajv({
+    strict: false,
+    validateFormats: true,
+    validateSchema: false,
+    allErrors: true,
+    inlineRefs: false,
+    logger: false,
+  });
+  const addFormats = addFormatsModule as unknown as (instance: Ajv) => Ajv;
+  addFormats(ajv);
+  ajv.addFormat("currency", /^[a-zA-Z]{3}$/);
+  ajv.addFormat("unix-time", {
+    type: "number",
+    validate: (value: number) => Number.isInteger(value) && value >= 0,
+  });
   const client = new Client(
     {
       name: "mcpforge-test",
@@ -66,6 +88,7 @@ export async function connectToMCPServer(
     },
     {
       capabilities: {},
+      jsonSchemaValidator: new AjvJsonSchemaValidator(ajv),
     },
   );
 
@@ -73,7 +96,8 @@ export async function connectToMCPServer(
     await client.connect(transport, { timeout });
   } catch (error) {
     await transport.close().catch(() => undefined);
-    const message = error instanceof Error ? error.message : "Unknown connection error";
+    const message =
+      error instanceof Error ? error.message : "Unknown connection error";
     const stderrMessage = stderrOutput.trim();
     throw new Error(
       stderrMessage

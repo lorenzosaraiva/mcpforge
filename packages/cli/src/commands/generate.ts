@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import {
+  applyReadOnlyPolicy,
   generateTypeScriptMCPServer,
   optimizeIRWithAI,
   type MCPForgeIR,
@@ -10,12 +11,18 @@ import {
 import { intro, log, note, outro, spinner } from "@clack/prompts";
 import type { Command } from "commander";
 
-import { loadConfig, type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
-import { isNonInteractiveRuntime } from "../utils/runtime.js";
-import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  resolveSelectedToolsForIR,
-} from "../utils/tool-selection.js";
+  loadConfig,
+  type MCPForgeConfig,
+  writeConfigFile,
+} from "../utils/config.js";
+import { isNonInteractiveRuntime } from "../utils/runtime.js";
+import {
+  buildCandidateIR,
+  buildFinalIR,
+  getDefaultSelectedTools,
+} from "../utils/planning.js";
+import { resolveSelectedToolsForIR } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
@@ -45,21 +52,33 @@ function resolveMaxTools(
   if (rawValue !== undefined) {
     const numeric = Number(rawValue);
     if (!Number.isFinite(numeric) || numeric <= 0) {
-      throw new Error(`--max-tools must be a positive number. Received: ${rawValue}`);
+      throw new Error(
+        `--max-tools must be a positive number. Received: ${rawValue}`,
+      );
     }
     return Math.floor(numeric);
   }
 
-  if (typeof configuredMaxTools === "number" && Number.isFinite(configuredMaxTools) && configuredMaxTools > 0) {
+  if (
+    typeof configuredMaxTools === "number" &&
+    Number.isFinite(configuredMaxTools) &&
+    configuredMaxTools > 0
+  ) {
     return configuredMaxTools;
   }
 
-  return mode === "strict" ? DEFAULT_STRICT_MAX_TOOLS : DEFAULT_STANDARD_MAX_TOOLS;
+  return mode === "strict"
+    ? DEFAULT_STRICT_MAX_TOOLS
+    : DEFAULT_STANDARD_MAX_TOOLS;
 }
 
-function resolveOutputDirectory(configOutputDir: string, configDir: string): string {
+function resolveOutputDirectory(
+  configOutputDir: string,
+  configDir: string,
+): string {
   const looksLikeGeneratedProject =
-    existsSync(join(configDir, "src")) && existsSync(join(configDir, "package.json"));
+    existsSync(join(configDir, "src")) &&
+    existsSync(join(configDir, "package.json"));
 
   if (looksLikeGeneratedProject) {
     return configDir;
@@ -74,30 +93,44 @@ export function registerGenerateCommand(program: Command): void {
     .description("Regenerate MCP server from mcpforge.config.json")
     .option("--optimize", "Re-run AI optimization before generating")
     .option("--strict", "Use strict optimization mode (aggressive curation)")
-    .option("--standard", "Use standard optimization mode (broader tool coverage)")
-    .option("--max-tools <number>", "Set max tools target for optimization mode")
+    .option(
+      "--standard",
+      "Use standard optimization mode (broader tool coverage)",
+    )
+    .option(
+      "--max-tools <number>",
+      "Set max tools target for optimization mode",
+    )
     .option("--pick", "Interactively re-pick which endpoints become tools")
     .option("--workflows", "Generate task-oriented workflow tools")
-    .option("--raw-endpoints", "Disable workflow planning and generate raw endpoint tools")
+    .option(
+      "--raw-endpoints",
+      "Disable workflow planning and generate raw endpoint tools",
+    )
+    .option(
+      "--read-only",
+      "Expose and enforce only GET, HEAD, and OPTIONS operations",
+    )
     .action(
-      async (
-        options: {
-          optimize?: boolean;
-          strict?: boolean;
-          standard?: boolean;
-          maxTools?: string;
-          pick?: boolean;
-          workflows?: boolean;
-          rawEndpoints?: boolean;
-        },
-      ) => {
+      async (options: {
+        optimize?: boolean;
+        strict?: boolean;
+        standard?: boolean;
+        maxTools?: string;
+        pick?: boolean;
+        workflows?: boolean;
+        rawEndpoints?: boolean;
+        readOnly?: boolean;
+      }) => {
         intro("mcpforge generate");
 
         const configDir = process.cwd();
         const configPath = join(configDir, "mcpforge.config.json");
 
         if (!existsSync(configPath)) {
-          throw new Error("mcpforge.config.json not found in current directory.");
+          throw new Error(
+            "mcpforge.config.json not found in current directory.",
+          );
         }
 
         const configSpinner = spinner();
@@ -105,12 +138,23 @@ export function registerGenerateCommand(program: Command): void {
         const config = await loadConfig(configPath);
         configSpinner.stop("Config loaded.");
 
-        const optimizerMode = resolveOptimizationMode(options, config.optimizerMode);
-        const maxTools = resolveMaxTools(options.maxTools, optimizerMode, config.maxTools);
+        const optimizerMode = resolveOptimizationMode(
+          options,
+          config.optimizerMode,
+        );
+        const maxTools = resolveMaxTools(
+          options.maxTools,
+          optimizerMode,
+          config.maxTools,
+        );
         if (options.workflows && options.rawEndpoints) {
-          throw new Error("Use either --workflows or --raw-endpoints, not both.");
+          throw new Error(
+            "Use either --workflows or --raw-endpoints, not both.",
+          );
         }
-        const workflowEnabled = options.workflows ?? (options.rawEndpoints ? false : config.workflowEnabled);
+        const workflowEnabled =
+          options.workflows ??
+          (options.rawEndpoints ? false : config.workflowEnabled);
 
         let optimized = config.optimized;
         let optimizedIR = config.optimizedIR;
@@ -134,7 +178,10 @@ export function registerGenerateCommand(program: Command): void {
             optimizedIR = result.optimizedIR;
             optimized = true;
             optimizeSpinner.stop("Optimization completed.");
-            note(`AI suggested ${result.optimizedIR.tools.length} tools.`, "Optimization Result");
+            note(
+              `AI suggested ${result.optimizedIR.tools.length} tools.`,
+              "Optimization Result",
+            );
           }
         }
 
@@ -144,7 +191,10 @@ export function registerGenerateCommand(program: Command): void {
           workflowEnabled,
           maxTools,
         });
-        let selectedTools = resolveSelectedToolsForIR(candidateIR, config.selectedTools);
+        let selectedTools = resolveSelectedToolsForIR(
+          candidateIR,
+          config.selectedTools,
+        );
 
         if (options.pick) {
           if (isNonInteractiveRuntime()) {
@@ -156,15 +206,14 @@ export function registerGenerateCommand(program: Command): void {
               );
             }
 
-            const defaultSelectedTools =
-              workflowEnabled
-                ? selectedTools
-                : getDefaultSelectedTools({
-                    sourceIR,
-                    optimizedIR: optimized ? optimizedIR : undefined,
-                    workflowEnabled,
-                    maxTools,
-                  });
+            const defaultSelectedTools = workflowEnabled
+              ? selectedTools
+              : getDefaultSelectedTools({
+                  sourceIR,
+                  optimizedIR: optimized ? optimizedIR : undefined,
+                  workflowEnabled,
+                  maxTools,
+                });
             const pickResult = await pickToolsFromIR(candidateIR, {
               defaultSelectedTools,
               message: workflowEnabled
@@ -178,7 +227,7 @@ export function registerGenerateCommand(program: Command): void {
           }
         }
 
-        const finalIR = buildFinalIR({
+        let finalIR = buildFinalIR({
           sourceIR,
           optimizedIR: optimized ? optimizedIR : undefined,
           workflowEnabled,
@@ -186,6 +235,9 @@ export function registerGenerateCommand(program: Command): void {
           selectedTools,
         });
 
+        if (options.readOnly || config.ir.executionPolicy?.readOnly)
+          finalIR = applyReadOnlyPolicy(finalIR, sourceIR);
+        selectedTools = resolveSelectedToolsForIR(finalIR, selectedTools);
         const outputDir = resolveOutputDirectory(config.outputDir, configDir);
         const generateSpinner = spinner();
         generateSpinner.start(`Generating server in ${outputDir}...`);

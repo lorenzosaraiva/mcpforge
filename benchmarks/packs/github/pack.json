@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "github",
+  "tasks": [
+    {
+      "id": "github-1",
+      "prompt": "Get the authenticated user's profile",
+      "operationId": "users/get-authenticated"
+    },
+    {
+      "id": "github-2",
+      "prompt": "Get a public user profile",
+      "operationId": "users/get-by-username"
+    },
+    {
+      "id": "github-3",
+      "prompt": "Get repository metadata",
+      "operationId": "repos/get"
+    },
+    {
+      "id": "github-4",
+      "prompt": "List repository issues",
+      "operationId": "issues/list-for-repo"
+    },
+    {
+      "id": "github-5",
+      "prompt": "Get an issue by its number",
+      "operationId": "issues/get"
+    },
+    {
+      "id": "github-6",
+      "prompt": "List pull requests",
+      "operationId": "pulls/list"
+    },
+    {
+      "id": "github-7",
+      "prompt": "Get a pull request by its number",
+      "operationId": "pulls/get"
+    },
+    {
+      "id": "github-8",
+      "prompt": "List repository commits",
+      "operationId": "repos/list-commits"
+    },
+    {
+      "id": "github-9",
+      "prompt": "List repository branches",
+      "operationId": "repos/list-branches"
+    },
+    {
+      "id": "github-10",
+      "prompt": "List repository contributors",
+      "operationId": "repos/list-contributors"
+    }
+  ],
+  "provenance": {
+    "kind": "upstream-excerpt",
+    "repository": "github/rest-api-description",
+    "commit": "c66e298030d4070b70a569dcd4268b3a041b5380",
+    "sourceUrl": "https://raw.githubusercontent.com/github/rest-api-description/c66e298030d4070b70a569dcd4268b3a041b5380/descriptions/api.github.com/api.github.com.json",
+    "sourceSha256": "b81f098026e98084a83f0a33db43502213919f68449b028543c373757766a758",
+    "specSha256": "e8d98e1590fe208e6891c1c6eb8aa60c58b905653a8c10ecc2a6d4a8d0afc7c2",
+    "transformations": [
+      "Select the listed GET operations plus three catalog distractors",
+      "Include transitive component references",
+      "Truncate descriptions to 400 characters and remove examples and vendor extensions",
+      "Add documented bearer authentication: required for /user, optional for public reads (https://docs.github.com/en/rest/users/users#get-the-authenticated-user)",
+      "Replace selected operation descriptions with reviewed task summaries"
+    ],
+    "verification": "local mock only; no live GitHub or Stripe requests",
+    "licenseUrl": "https://github.com/github/rest-api-description/blob/c66e298030d4070b70a569dcd4268b3a041b5380/LICENSE.md"
+  }
+}

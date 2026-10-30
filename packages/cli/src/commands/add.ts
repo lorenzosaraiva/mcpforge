@@ -12,7 +12,11 @@ import {
   type RegistryIndexEntry,
 } from "../core.js";
 import { type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
-import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
+import {
+  buildCandidateIR,
+  buildFinalIR,
+  getDefaultSelectedTools,
+} from "../utils/planning.js";
 import { promptConfirm } from "../utils/prompts.js";
 import {
   fetchRegistryEntry,
@@ -23,7 +27,10 @@ import {
 } from "../utils/registry.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
-import { getAllToolSelectionValues, resolveSelectedToolsForIR } from "../utils/tool-selection.js";
+import {
+  getAllToolSelectionValues,
+  resolveSelectedToolsForIR,
+} from "../utils/tool-selection.js";
 
 export interface AddCommandOptions {
   optimize?: boolean;
@@ -63,7 +70,7 @@ function getDefaultOutputDir(entry: RegistryEntrySnapshot): string {
 function buildMetadataCard(entry: RegistryEntrySnapshot): string {
   const verificationLine =
     entry.verification?.status === "passed"
-      ? `Verification: verified on ${entry.verification.verifiedAt} (${entry.verification.mode}, compatibility v${entry.verification.compatibilityVersion})`
+      ? `Verification: ${entry.verification.compatibilityVersion === "3" && entry.verification.runtimeHash ? "runtime-bound" : "legacy report"} on ${entry.verification.verifiedAt} (${entry.verification.mode}, ${entry.verification.skippedToolCount ?? 0} skipped)`
       : "Verification: unverified";
 
   return [
@@ -98,11 +105,15 @@ export function findRegistryTarget(
   suggestions: RegistryIndexEntry[];
 } {
   const parsed = parseSlugSpecifier(slugSpecifier);
-  const entry = index.entries.find((candidate) => candidate.slug === parsed.slug);
+  const entry = index.entries.find(
+    (candidate) => candidate.slug === parsed.slug,
+  );
   return {
     entry,
     version: parsed.version,
-    suggestions: entry ? [] : suggestRegistryEntries(index.entries, parsed.slug),
+    suggestions: entry
+      ? []
+      : suggestRegistryEntries(index.entries, parsed.slug),
   };
 }
 
@@ -119,7 +130,9 @@ export async function loadRegistryInstallTarget(
       match.suggestions.length > 0
         ? ` Did you mean: ${match.suggestions.map((candidate) => candidate.slug).join(", ")}?`
         : "";
-    throw new Error(`Registry entry "${slugSpecifier}" was not found.${suggestionSuffix}`);
+    throw new Error(
+      `Registry entry "${slugSpecifier}" was not found.${suggestionSuffix}`,
+    );
   }
 
   if (match.version && match.entry.version !== match.version) {
@@ -142,18 +155,22 @@ export async function generateFromRegistryEntry(
   options: AddCommandOptions,
   dependencies: AddCommandDependencies = {},
 ): Promise<{ outputDir: string; config: MCPForgeConfig; finalIR: MCPForgeIR }> {
-  const generateServer = dependencies.generateServer ?? generateTypeScriptMCPServer;
+  const generateServer =
+    dependencies.generateServer ?? generateTypeScriptMCPServer;
   const optimize = dependencies.optimize ?? optimizeIRWithAI;
   const writeConfig = dependencies.writeConfig ?? writeConfigFile;
   const pickTools = dependencies.pickTools ?? pickToolsFromIR;
-  const isNonInteractive = dependencies.isNonInteractive ?? isNonInteractiveRuntime;
+  const isNonInteractive =
+    dependencies.isNonInteractive ?? isNonInteractiveRuntime;
   const logger = dependencies.logger ?? (() => {});
 
   const rawOutputDir = outputDir || getDefaultOutputDir(entry);
   const resolvedOutputDir = resolve(process.cwd(), rawOutputDir);
   const sourceIR = getSourceIR(entry);
 
-  const shouldRerunPipeline = Boolean(options.optimize || options.workflows || options.pick);
+  const shouldRerunPipeline = Boolean(
+    options.optimize || options.workflows || options.pick,
+  );
   let optimized = entry.optimized;
   let workflowEnabled = entry.workflowEnabled;
   let optimizedIR = entry.optimizedIR;
@@ -272,38 +289,52 @@ export function registerAddCommand(program: Command): void {
     .option("--optimize", "Re-run AI optimization before generating")
     .option("--workflows", "Re-plan workflow tools before generating")
     .option("--pick", "Interactively customize which tools get generated")
-    .action(async (slug: string, outputDir: string | undefined, options: AddCommandOptions) => {
-      intro("mcpforge add");
+    .action(
+      async (
+        slug: string,
+        outputDir: string | undefined,
+        options: AddCommandOptions,
+      ) => {
+        intro("mcpforge add");
 
-      const resolveSpinner = spinner();
-      resolveSpinner.start(`Resolving registry entry "${slug}"...`);
-      const target = await loadRegistryInstallTarget(slug);
-      resolveSpinner.stop(`Fetched ${target.entry.name} from the registry.`);
+        const resolveSpinner = spinner();
+        resolveSpinner.start(`Resolving registry entry "${slug}"...`);
+        const target = await loadRegistryInstallTarget(slug);
+        resolveSpinner.stop(`Fetched ${target.entry.name} from the registry.`);
 
-      note(buildMetadataCard(target.entry), "Registry Entry");
+        note(buildMetadataCard(target.entry), "Registry Entry");
 
-      const confirmed = await promptConfirm("Generate this MCP server locally?", true);
-      if (!confirmed) {
-        outro("Add cancelled. No files were written.");
-        return;
-      }
+        const confirmed = await promptConfirm(
+          "Generate this MCP server locally?",
+          true,
+        );
+        if (!confirmed) {
+          outro("Add cancelled. No files were written.");
+          return;
+        }
 
-      const generateSpinner = spinner();
-      generateSpinner.start("Generating MCP server from registry entry...");
-      const result = await generateFromRegistryEntry(target.entry, outputDir, options, {
-        logger: (message) => log.warn(message),
-      });
-      generateSpinner.stop("Registry entry generated.");
+        const generateSpinner = spinner();
+        generateSpinner.start("Generating MCP server from registry entry...");
+        const result = await generateFromRegistryEntry(
+          target.entry,
+          outputDir,
+          options,
+          {
+            logger: (message) => log.warn(message),
+          },
+        );
+        generateSpinner.stop("Registry entry generated.");
 
-      outro(
-        [
-          `Installed ${target.entry.slug}@${target.entry.version} in ${result.outputDir}`,
-          "",
-          "Next steps:",
-          `1) cd ${result.outputDir}`,
-          "2) npm install",
-          "3) npm run build",
-        ].join("\n"),
-      );
-    });
+        outro(
+          [
+            `Installed ${target.entry.slug}@${target.entry.version} in ${result.outputDir}`,
+            "",
+            "Next steps:",
+            `1) cd ${result.outputDir}`,
+            "2) npm install",
+            "3) npm run build",
+          ].join("\n"),
+        );
+      },
+    );
 }

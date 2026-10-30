@@ -8,7 +8,10 @@
       "publisher": "lorenzosaraiva",
       "version": "1.0.0",
       "toolCount": 2,
-      "tags": ["payments", "billing"],
+      "tags": [
+        "payments",
+        "billing"
+      ],
       "optimized": true,
       "workflowEnabled": true,
       "publishedAt": "2026-04-01",
@@ -24,6 +27,93 @@
         "failedToolCount": 0
       },
       "entryFile": "entries/stripe.json"
+    },
+    {
+      "slug": "github-tasks",
+      "name": "github task pack",
+      "description": "Ten curated github tasks; local mock verification only.",
+      "publisher": "lorenzosaraiva",
+      "version": "2.0.0-rc.1",
+      "toolCount": 10,
+      "tags": [
+        "github",
+        "task-pack"
+      ],
+      "optimized": true,
+      "workflowEnabled": false,
+      "publishedAt": "2026-10-30",
+      "verification": {
+        "status": "passed",
+        "mode": "mock",
+        "verifiedAt": "2026-10-30T00:24:54.805Z",
+        "compatibilityVersion": "3",
+        "finalIRHash": "a7eeaa030a867777734f972e950b2430d51b97113fa643a61968e7e3efcde716",
+        "runtimeHash": "7764b468f1a5b9af8cb66c6d43ff58d1bb7d9a3ffbfab10e7e29a93399532c63",
+        "generatorVersion": "2",
+        "toolCount": 10,
+        "passedToolCount": 10,
+        "skippedToolCount": 0,
+        "failedToolCount": 0
+      },
+      "entryFile": "entries/github-tasks.json"
+    },
+    {
+      "slug": "stripe-test-tasks",
+      "name": "stripe-test task pack",
+      "description": "Ten curated stripe-test tasks; local mock verification only.",
+      "publisher": "lorenzosaraiva",
+      "version": "2.0.0-rc.1",
+      "toolCount": 10,
+      "tags": [
+        "stripe-test",
+        "task-pack"
+      ],
+      "optimized": true,
+      "workflowEnabled": false,
+      "publishedAt": "2026-10-30",
+      "verification": {
+        "status": "passed",
+        "mode": "mock",
+        "verifiedAt": "2026-10-30T00:25:46.474Z",
+        "compatibilityVersion": "3",
+        "finalIRHash": "7ac04e501d85a57d435a9e47d9a0d4a6d9a6ac607332405f6f79f275c144bd03",
+        "runtimeHash": "a5c66f6509c7fad8a2ff4330cb21c87595a4667c131d348568b567f0433b27c0",
+        "generatorVersion": "2",
+        "toolCount": 10,
+        "passedToolCount": 10,
+        "skippedToolCount": 0,
+        "failedToolCount": 0
+      },
+      "entryFile": "entries/stripe-test-tasks.json"
+    },
+    {
+      "slug": "reference-tasks",
+      "name": "reference task pack",
+      "description": "Ten curated reference tasks; local mock verification only.",
+      "publisher": "lorenzosaraiva",
+      "version": "2.0.0-rc.1",
+      "toolCount": 10,
+      "tags": [
+        "reference",
+        "task-pack"
+      ],
+      "optimized": true,
+      "workflowEnabled": false,
+      "publishedAt": "2026-10-30",
+      "verification": {
+        "status": "passed",
+        "mode": "mock",
+        "verifiedAt": "2026-10-30T00:26:40.768Z",
+        "compatibilityVersion": "3",
+        "finalIRHash": "29b0dd70aa031792045066d269159b4d69c9543f642a90c36037733f3f673852",
+        "runtimeHash": "ecdcb03b48797c8b0c9abd615336186855b5d1d442b9fab594391a2e29a5e6b4",
+        "generatorVersion": "2",
+        "toolCount": 10,
+        "passedToolCount": 10,
+        "skippedToolCount": 0,
+        "failedToolCount": 0
+      },
+      "entryFile": "entries/reference-tasks.json"
     }
   ]
 }

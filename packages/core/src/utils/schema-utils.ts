@@ -1,67 +1,103 @@
 import type { ResponseDef } from "../parser/types.js";
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: JsonValue }
-  | JsonValue[];
+  string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
 
 function deepClone<T>(value: T): T {
-  const seen = new WeakMap<object, unknown>();
-
-  const clone = (input: unknown): unknown => {
-    if (Array.isArray(input)) {
-      if (seen.has(input)) {
-        return [];
+  const targets = new WeakMap<object, string>();
+  const active = new WeakSet<object>();
+  const maps = new Set([
+    "properties",
+    "patternProperties",
+    "$defs",
+    "definitions",
+    "dependentSchemas",
+  ]);
+  const arrays = new Set(["oneOf", "anyOf", "allOf", "prefixItems"]);
+  const singles = new Set([
+    "items",
+    "additionalProperties",
+    "unevaluatedProperties",
+    "contains",
+    "not",
+    "if",
+    "then",
+    "else",
+    "propertyNames",
+  ]);
+  const token = (key: string) => key.replace(/~/g, "~0").replace(/\//g, "~1");
+  const clone = (input: unknown, pointer: string, schema: boolean): unknown => {
+    if (!input || typeof input !== "object") return input;
+    if (schema && !Array.isArray(input) && targets.has(input))
+      return { $ref: targets.get(input) };
+    if (active.has(input)) return Array.isArray(input) ? [] : {};
+    if (schema && !Array.isArray(input)) targets.set(input, pointer);
+    active.add(input);
+    let output: unknown;
+    if (Array.isArray(input))
+      output = input.map((item, index) =>
+        clone(item, `${pointer}/${index}`, schema),
+      );
+    else {
+      const record: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(input)) {
+        const path = `${pointer}/${token(key)}`;
+        if (
+          maps.has(key) &&
+          item &&
+          typeof item === "object" &&
+          !Array.isArray(item)
+        ) {
+          record[key] = Object.fromEntries(
+            Object.entries(item).map(([name, child]) => [
+              name,
+              clone(child, `${path}/${token(name)}`, true),
+            ]),
+          );
+        } else
+          record[key] = clone(item, path, arrays.has(key) || singles.has(key));
       }
-      const output: unknown[] = [];
-      seen.set(input, output);
-      for (const item of input) {
-        output.push(clone(item));
-      }
-      return output;
+      output = record;
     }
-
-    if (!input || typeof input !== "object") {
-      return input;
-    }
-
-    if (seen.has(input)) {
-      return {};
-    }
-
-    const output: Record<string, unknown> = {};
-    seen.set(input, output);
-    for (const [key, item] of Object.entries(input as Record<string, unknown>)) {
-      output[key] = clone(item);
-    }
+    active.delete(input);
     return output;
   };
-
-  return clone(value) as T;
+  return clone(value, "#", true) as T;
 }
 
-function normalizeNode(input: unknown): unknown {
+function normalizeNode(
+  input: unknown,
+  memo = new WeakMap<object, unknown>(),
+): unknown {
   if (Array.isArray(input)) {
-    return input.map((item) => normalizeNode(item));
+    if (memo.has(input)) return memo.get(input);
+    const output: unknown[] = [];
+    memo.set(input, output);
+    for (const item of input) output.push(normalizeNode(item, memo));
+    return output;
   }
 
   if (!input || typeof input !== "object") {
     return input;
   }
-
+  if (memo.has(input)) return memo.get(input);
+  const original = input as Record<string, unknown>;
   const output: Record<string, unknown> = {};
+  const inferredType =
+    original.type ??
+    (original.properties ? "object" : original.items ? "array" : undefined);
+  const wrapped = original.nullable === true && !inferredType;
+  const result = wrapped ? { anyOf: [output, { type: "null" }] } : output;
+  memo.set(input, result);
   for (const [key, value] of Object.entries(input)) {
     if (value !== undefined) {
-      output[key] = normalizeNode(value);
+      output[key] = normalizeNode(value, memo);
     }
   }
 
   if (output.nullable === true) {
     delete output.nullable;
-    const currentType = output.type;
+    const currentType = output.type ?? inferredType;
     if (typeof currentType === "string") {
       output.type = [currentType, "null"];
     } else if (Array.isArray(currentType) && !currentType.includes("null")) {
@@ -86,18 +122,44 @@ function normalizeNode(input: unknown): unknown {
     }
   }
 
-  return output;
+  return result;
 }
 
 export function toJsonSchema(schema: unknown): Record<string, unknown> {
-  const safeSchema = schema && typeof schema === "object" ? deepClone(schema) : {};
-  const normalized = normalizeNode(safeSchema);
+  const safeSchema = schema && typeof schema === "object" ? schema : {};
+  const normalized = deepClone(normalizeNode(safeSchema));
 
-  if (!normalized || typeof normalized !== "object" || Array.isArray(normalized)) {
+  if (
+    !normalized ||
+    typeof normalized !== "object" ||
+    Array.isArray(normalized)
+  ) {
     return { type: "object", additionalProperties: true };
   }
 
   return normalized as Record<string, unknown>;
+}
+
+/** Local JSON pointers are relative to a schema root; embedding requires rebasing them. */
+export function rebaseJsonSchema(
+  schema: Record<string, unknown>,
+  prefix: string,
+): Record<string, unknown> {
+  const visit = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        key === "$ref" &&
+        typeof item === "string" &&
+        (item === "#" || item.startsWith("#/"))
+          ? `${prefix}${item.slice(1)}`
+          : visit(item),
+      ]),
+    );
+  };
+  return visit(schema) as Record<string, unknown>;
 }
 
 export function toStructuredOutputSchema(
@@ -107,13 +169,21 @@ export function toStructuredOutputSchema(
     return undefined;
   }
 
-  const contentSchemas = response.contentTypes
-    ?.map((entry) => toJsonSchema(entry.schema))
-    .filter((schema) => Object.keys(schema).length > 0) ?? [];
+  const contentSchemas =
+    response.contentTypes
+      ?.map((entry) => toJsonSchema(entry.schema))
+      .filter((schema) => Object.keys(schema).length > 0) ?? [];
   const dataSchema =
     contentSchemas.length > 1
-      ? { anyOf: contentSchemas }
-      : contentSchemas[0] ?? toJsonSchema(response.schema);
+      ? {
+          anyOf: contentSchemas.map((schema, index) =>
+            rebaseJsonSchema(schema, `#/properties/data/anyOf/${index}`),
+          ),
+        }
+      : rebaseJsonSchema(
+          contentSchemas[0] ?? toJsonSchema(response.schema),
+          "#/properties/data",
+        );
 
   return {
     type: "object",
@@ -140,7 +210,9 @@ export function inferSchemaType(schema: unknown): string {
   }
 
   if (Array.isArray(typed.type) && typed.type.length > 0) {
-    const firstString = typed.type.find((item): item is string => typeof item === "string");
+    const firstString = typed.type.find(
+      (item): item is string => typeof item === "string",
+    );
     if (firstString) {
       return firstString;
     }

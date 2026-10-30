@@ -15,7 +15,7 @@ Workflow tools are deterministic task wrappers that execute one or more upstream
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22.19+
 - npm 9+
 
 ## Setup
@@ -131,6 +131,8 @@ Add this to `.cursor/mcp.json` or your global Cursor MCP config:
 - Request bodies: `application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, text payloads, and binary-compatible bodies.
 - Responses: documented OpenAPI 3.x and Swagger 2.0 success schemas are exposed as MCP `outputSchema` and returned as `structuredContent`.
 - Verification: `npx mcpforge test` validates generated request construction against a local mock upstream before you switch to live calls.
+- Diagnostics: `mcpforge doctor --dir .` inspects this project without starting processes. Add `--verify` to build and execute local mock checks explicitly.
+- Read-only policy: generate with `--read-only` or set `MCPFORGE_READ_ONLY=1` to hide write tools and block write requests before authentication/network calls.
 - OAuth notes: browser-based authorization-code login is not generated. Use an existing refresh token, a client-credentials app, or a ready-to-use access token in `ACCESS_TOKEN`.
 
 ## Troubleshooting

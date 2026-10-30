@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,14 @@ import type {
 } from "../parser/types.js";
 import { isEndpointTool, isWorkflowTool } from "../parser/types.js";
 import type { GenerateProjectOptions, GenerateProjectResult } from "./types.js";
-import { toJsonSchema, toKebabCase, toStructuredOutputSchema } from "../utils/schema-utils.js";
+import {
+  rebaseJsonSchema,
+  toJsonSchema,
+  toKebabCase,
+  toStructuredOutputSchema,
+} from "../utils/schema-utils.js";
+import { applyReadOnlyPolicy, toolAnnotations } from "./policy.js";
+import { GENERATOR_RUNTIME_VERSION } from "./runtime-version.js";
 
 interface PreparedEndpointRuntime {
   name: string;
@@ -86,11 +94,16 @@ function registerHelpers(): void {
     return;
   }
 
-  Handlebars.registerHelper("json", (context: unknown) => JSON.stringify(context, null, 2));
+  Handlebars.registerHelper("json", (context: unknown) =>
+    JSON.stringify(context, null, 2),
+  );
   Handlebars.registerHelper("uppercase", (value: unknown) =>
     typeof value === "string" ? value.toUpperCase() : "",
   );
-  Handlebars.registerHelper("eq", (left: unknown, right: unknown) => left === right);
+  Handlebars.registerHelper(
+    "eq",
+    (left: unknown, right: unknown) => left === right,
+  );
   helpersRegistered = true;
 }
 
@@ -101,14 +114,19 @@ function resolveTemplateDirectory(): string {
     resolve(process.cwd(), "packages/core/src/generator/templates"),
   ];
 
-  const selected = candidates.find((candidate) => existsSync(join(candidate, "index.ts.hbs")));
+  const selected = candidates.find((candidate) =>
+    existsSync(join(candidate, "index.ts.hbs")),
+  );
   if (!selected) {
     throw new Error("Template directory could not be resolved.");
   }
   return selected;
 }
 
-async function renderTemplate(templatePath: string, data: Record<string, unknown>): Promise<string> {
+async function renderTemplate(
+  templatePath: string,
+  data: Record<string, unknown>,
+): Promise<string> {
   let template = templateCache.get(templatePath);
   if (!template) {
     const source = await readFile(templatePath, "utf8");
@@ -120,13 +138,25 @@ async function renderTemplate(templatePath: string, data: Record<string, unknown
 
 function normalizeType(type: string): string {
   const normalized = type.toLowerCase();
-  if (["string", "number", "integer", "boolean", "object", "array", "null"].includes(normalized)) {
+  if (
+    [
+      "string",
+      "number",
+      "integer",
+      "boolean",
+      "object",
+      "array",
+      "null",
+    ].includes(normalized)
+  ) {
     return normalized;
   }
   return "string";
 }
 
-function toEndpointInputSchema(tool: EndpointToolDefinition): Record<string, unknown> {
+function toEndpointInputSchema(
+  tool: EndpointToolDefinition,
+): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
@@ -150,11 +180,15 @@ function toEndpointInputSchema(tool: EndpointToolDefinition): Record<string, unk
   }
 
   if (tool.requestBody) {
-    properties.body = toJsonSchema(tool.requestBody.schema);
+    properties.body = rebaseJsonSchema(
+      toJsonSchema(tool.requestBody.schema),
+      "#/properties/body",
+    );
     if ((tool.requestBody.contentTypes?.length ?? 0) > 1) {
       properties.__contentType = {
         type: "string",
-        description: "Select one of the request media types declared by the OpenAPI operation.",
+        description:
+          "Select one of the request media types declared by the OpenAPI operation.",
         enum: tool.requestBody.contentTypes?.map((entry) => entry.contentType),
         default: tool.requestBody.contentType,
       };
@@ -181,6 +215,11 @@ function toPreparedEndpointRuntime(
   tool: EndpointToolDefinition,
   fallbackSecurityRequirements: MCPForgeIR["defaultSecurityRequirements"],
 ): PreparedEndpointRuntime {
+  if (["GET", "HEAD"].includes(tool.method.toUpperCase()) && tool.requestBody) {
+    throw new Error(
+      `Operation "${tool.name}" declares a ${tool.method.toUpperCase()} request body, which the Fetch runtime cannot send. Describe supported query parameters in the specification or exclude this operation.`,
+    );
+  }
   const pathParams = tool.parameters
     .filter((param) => param.location === "path")
     .map((param) => ({ name: param.name, token: `{${param.name}}` }));
@@ -206,10 +245,11 @@ function toPreparedEndpointRuntime(
     hasRequestBody: Boolean(tool.requestBody),
     requestBodyRequired: tool.requestBody?.required === true,
     requestBodyContentType: tool.requestBody?.contentType ?? "application/json",
-    requestBodyContentTypes:
-      tool.requestBody?.contentTypes?.map((entry) => entry.contentType) ??
-      [tool.requestBody?.contentType ?? "application/json"],
-    securityRequirements: tool.securityRequirements ?? fallbackSecurityRequirements ?? [],
+    requestBodyContentTypes: tool.requestBody?.contentTypes?.map(
+      (entry) => entry.contentType,
+    ) ?? [tool.requestBody?.contentType ?? "application/json"],
+    securityRequirements:
+      tool.securityRequirements ?? fallbackSecurityRequirements ?? [],
   };
 }
 
@@ -229,12 +269,14 @@ function createPreparedToolBase(
   };
 }
 
-function resolveEndpointMap(ir: MCPForgeIR, sourceIR?: MCPForgeIR): Map<string, EndpointToolDefinition> {
+function resolveEndpointMap(
+  ir: MCPForgeIR,
+  sourceIR?: MCPForgeIR,
+): Map<string, EndpointToolDefinition> {
   const endpointMap = new Map<string, EndpointToolDefinition>();
-  const endpointTools = [
-    ...(sourceIR?.tools ?? []),
-    ...ir.tools,
-  ].filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
+  const endpointTools = [...(sourceIR?.tools ?? []), ...ir.tools].filter(
+    (tool): tool is EndpointToolDefinition => isEndpointTool(tool),
+  );
 
   for (const tool of endpointTools) {
     if (tool.originalOperationId) {
@@ -263,18 +305,25 @@ function prepareWorkflowSteps(
       id: step.id,
       saveAs: step.saveAs,
       args: step.args,
-      endpoint: toPreparedEndpointRuntime(endpointTool, fallbackSecurityRequirements),
+      endpoint: toPreparedEndpointRuntime(
+        endpointTool,
+        fallbackSecurityRequirements,
+      ),
     };
   });
 }
 
-function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPublicTool[] {
+function preparePublicTools(
+  ir: MCPForgeIR,
+  sourceIR?: MCPForgeIR,
+): PreparedPublicTool[] {
   const endpointMap = resolveEndpointMap(ir, sourceIR);
   const legacySecurityRequirements =
     !ir.securitySchemes && ir.auth.type !== "none"
       ? [{ schemes: [{ scheme: "legacy", scopes: ir.auth.scopes ?? [] }] }]
       : undefined;
-  const fallbackSecurityRequirements = ir.defaultSecurityRequirements ?? legacySecurityRequirements;
+  const fallbackSecurityRequirements =
+    ir.defaultSecurityRequirements ?? legacySecurityRequirements;
 
   return ir.tools.map((tool) => {
     if (isEndpointTool(tool)) {
@@ -289,11 +338,17 @@ function preparePublicTools(ir: MCPForgeIR, sourceIR?: MCPForgeIR): PreparedPubl
       };
     }
 
-    const workflowInputSchema = JSON.parse(JSON.stringify(tool.inputSchema)) as Record<string, unknown>;
+    const workflowInputSchema = JSON.parse(
+      JSON.stringify(tool.inputSchema),
+    ) as Record<string, unknown>;
     return {
       ...createPreparedToolBase(tool, workflowInputSchema, tool.outputSchema),
       kind: "workflow",
-      steps: prepareWorkflowSteps(tool, endpointMap, fallbackSecurityRequirements),
+      steps: prepareWorkflowSteps(
+        tool,
+        endpointMap,
+        fallbackSecurityRequirements,
+      ),
       output: tool.output,
       hasOutput: tool.output !== undefined,
     };
@@ -310,19 +365,44 @@ async function writeRenderedFile(
   await writeFile(outputPath, rendered, "utf8");
 }
 
-async function removeStaleToolFiles(toolsDir: string, nextToolNames: string[]): Promise<void> {
+async function removeStaleToolFiles(
+  toolsDir: string,
+  nextToolNames: string[],
+): Promise<void> {
   if (!existsSync(toolsDir)) {
     return;
   }
 
-  const expectedFiles = new Set(nextToolNames.map((toolName) => `${toolName}.ts`));
+  const expectedFiles = new Set(
+    nextToolNames.map((toolName) => `${toolName}.ts`),
+  );
   const existingFiles = await readdir(toolsDir, { withFileTypes: true });
 
   await Promise.all(
     existingFiles
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts") && !expectedFiles.has(entry.name))
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          entry.name.endsWith(".ts") &&
+          !expectedFiles.has(entry.name),
+      )
       .map((entry) => unlink(join(toolsDir, entry.name))),
   );
+}
+
+export async function getGeneratorIdentity() {
+  const templateDir = resolveTemplateDirectory();
+  const hash = createHash("sha256");
+  for (const filename of (await readdir(templateDir))
+    .filter((name) => name.endsWith(".hbs"))
+    .sort()) {
+    hash.update(filename).update(await readFile(join(templateDir, filename)));
+  }
+  return {
+    schemaVersion: 1,
+    runtimeVersion: GENERATOR_RUNTIME_VERSION,
+    templateHash: hash.digest("hex"),
+  };
 }
 
 export async function generateTypeScriptMCPServer(
@@ -331,6 +411,10 @@ export async function generateTypeScriptMCPServer(
 ): Promise<GenerateProjectResult> {
   registerHelpers();
   const templateDir = resolveTemplateDirectory();
+  if (ir.executionPolicy?.readOnly)
+    ir = applyReadOnlyPolicy(ir, options.sourceIR ?? ir);
+  if (!ir.tools.length)
+    throw new Error("No supported tools are selected for generation.");
 
   const outputDir = resolve(options.outputDir);
   const srcDir = join(outputDir, "src");
@@ -338,8 +422,14 @@ export async function generateTypeScriptMCPServer(
 
   await mkdir(toolsDir, { recursive: true });
 
-  const projectName = options.projectName ?? `mcp-server-${toKebabCase(ir.apiName)}`;
-  const preparedTools = preparePublicTools(ir, options.sourceIR);
+  const projectName =
+    options.projectName ?? `mcp-server-${toKebabCase(ir.apiName)}`;
+  const preparedTools = preparePublicTools(ir, options.sourceIR).map(
+    (tool, index) => ({
+      ...tool,
+      annotations: toolAnnotations(ir.tools[index]!, options.sourceIR ?? ir),
+    }),
+  );
   const securitySchemes =
     ir.securitySchemes ?? (ir.auth.type !== "none" ? { legacy: ir.auth } : {});
   const hasAuth = Object.keys(securitySchemes).length > 0;
@@ -349,6 +439,7 @@ export async function generateTypeScriptMCPServer(
     preparedTools.map((tool) => tool.handlerFileName),
   );
   const commonTemplateData = {
+    readOnly: Boolean(ir.executionPolicy?.readOnly),
     projectName,
     apiName: ir.apiName,
     apiDescription: ir.apiDescription,
@@ -362,8 +453,10 @@ export async function generateTypeScriptMCPServer(
     structuredOutputToolNames: preparedTools
       .filter((tool) => Boolean(tool.outputSchema))
       .map((tool) => tool.name),
-    workflowToolCount: preparedTools.filter((tool) => tool.kind === "workflow").length,
-    endpointToolCount: preparedTools.filter((tool) => tool.kind === "endpoint").length,
+    workflowToolCount: preparedTools.filter((tool) => tool.kind === "workflow")
+      .length,
+    endpointToolCount: preparedTools.filter((tool) => tool.kind === "endpoint")
+      .length,
     generatedAt: new Date().toISOString(),
   };
 
@@ -427,7 +520,11 @@ export async function generateTypeScriptMCPServer(
   fileCount += 1;
 
   const TOOL_WRITE_CONCURRENCY = 16;
-  for (let index = 0; index < preparedTools.length; index += TOOL_WRITE_CONCURRENCY) {
+  for (
+    let index = 0;
+    index < preparedTools.length;
+    index += TOOL_WRITE_CONCURRENCY
+  ) {
     const batch = preparedTools.slice(index, index + TOOL_WRITE_CONCURRENCY);
     await Promise.all(
       batch.map((tool) =>
@@ -435,7 +532,9 @@ export async function generateTypeScriptMCPServer(
           join(toolsDir, `${tool.handlerFileName}.ts`),
           join(
             templateDir,
-            tool.kind === "workflow" ? "workflow-handler.ts.hbs" : "tool-handler.ts.hbs",
+            tool.kind === "workflow"
+              ? "workflow-handler.ts.hbs"
+              : "tool-handler.ts.hbs",
           ),
           {
             ...commonTemplateData,
@@ -447,6 +546,11 @@ export async function generateTypeScriptMCPServer(
     fileCount += batch.length;
   }
 
+  await writeFile(
+    join(outputDir, "mcpforge.runtime.json"),
+    `${JSON.stringify(await getGeneratorIdentity(), null, 2)}\n`,
+  );
+  fileCount += 1;
   return {
     outputDir,
     fileCount,

@@ -7,9 +7,14 @@ import { z } from "zod";
 
 import type { MCPForgeIR, ScrapedDocPage } from "../core.js";
 import { getAllToolSelectionValues } from "./tool-selection.js";
+import {
+  computeRuntimeHash,
+  generationIsCurrent,
+  GENERATOR_RUNTIME_VERSION,
+} from "./runtime-integrity.js";
 
 export const CURRENT_CONFIG_VERSION = 2;
-export const CURRENT_COMPATIBILITY_VERSION = "2";
+export const CURRENT_COMPATIBILITY_VERSION = "3";
 
 const VerificationSchema = z.object({
   status: z.enum(["passed", "failed"]),
@@ -17,6 +22,8 @@ const VerificationSchema = z.object({
   verifiedAt: z.string().min(1),
   compatibilityVersion: z.string().min(1),
   finalIRHash: z.string().min(1),
+  runtimeHash: z.string().optional(),
+  generatorVersion: z.string().optional(),
   toolCount: z.number().int().nonnegative().optional(),
   passedToolCount: z.number().int().nonnegative().optional(),
   skippedToolCount: z.number().int().nonnegative().optional(),
@@ -60,6 +67,8 @@ export interface VerificationMetadata {
   verifiedAt: string;
   compatibilityVersion: string;
   finalIRHash: string;
+  runtimeHash?: string;
+  generatorVersion?: string;
   toolCount?: number;
   passedToolCount?: number;
   skippedToolCount?: number;
@@ -111,8 +120,10 @@ function migrateIR(input: MCPForgeIR): MCPForgeIR {
     ...input,
     irVersion: 2,
     securitySchemes:
-      input.securitySchemes ?? (input.auth.type === "none" ? {} : { legacy: input.auth }),
-    defaultSecurityRequirements: input.defaultSecurityRequirements ?? legacyRequirements,
+      input.securitySchemes ??
+      (input.auth.type === "none" ? {} : { legacy: input.auth }),
+    defaultSecurityRequirements:
+      input.defaultSecurityRequirements ?? legacyRequirements,
     tools: input.tools.map((tool) =>
       tool.kind === "endpoint" && tool.securityRequirements === undefined
         ? { ...tool, securityRequirements: legacyRequirements }
@@ -130,7 +141,10 @@ function toKebabCase(value: string): string {
     .toLowerCase();
 }
 
-function resolveApiName(configuredApiName: string | undefined, ir: MCPForgeIR): string {
+function resolveApiName(
+  configuredApiName: string | undefined,
+  ir: MCPForgeIR,
+): string {
   const candidate = configuredApiName?.trim() || ir.apiName?.trim();
   return candidate ? toKebabCase(candidate) : "generated-api";
 }
@@ -150,7 +164,11 @@ function resolveSpecSourceForRuntime(
   outputDir: string,
   configDir: string,
 ): string {
-  if (sourceType === "docs-url" || isHttpUrl(specSource) || isAbsolute(specSource)) {
+  if (
+    sourceType === "docs-url" ||
+    isHttpUrl(specSource) ||
+    isAbsolute(specSource)
+  ) {
     return specSource;
   }
 
@@ -174,7 +192,7 @@ function resolveSpecSourceForRuntime(
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "null";
   }
 
   if (Array.isArray(value)) {
@@ -182,7 +200,10 @@ function stableStringify(value: unknown): string {
   }
 
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+  // JSON object order must be independent of OS locale and persistence.
+  const keys = Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort();
   return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
 }
 
@@ -193,6 +214,7 @@ export function computeIRHash(ir: MCPForgeIR): string {
 export function resolveVerificationState(
   verification: VerificationMetadata | undefined,
   ir: MCPForgeIR,
+  runtimeHash?: string,
 ): VerificationState {
   if (!verification) {
     return "unverified";
@@ -201,7 +223,10 @@ export function resolveVerificationState(
   const currentHash = computeIRHash(ir);
   if (
     verification.finalIRHash !== currentHash ||
-    verification.compatibilityVersion !== CURRENT_COMPATIBILITY_VERSION
+    verification.compatibilityVersion !== CURRENT_COMPATIBILITY_VERSION ||
+    !verification.runtimeHash ||
+    verification.generatorVersion !== GENERATOR_RUNTIME_VERSION ||
+    (runtimeHash !== undefined && verification.runtimeHash !== runtimeHash)
   ) {
     return "stale";
   }
@@ -209,7 +234,9 @@ export function resolveVerificationState(
   return verification.status === "passed" ? "verified" : "failed";
 }
 
-export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConfig> {
+export async function loadConfig(
+  configPath: string,
+): Promise<LoadedMCPForgeConfig> {
   let parsedJson: unknown;
   try {
     const rawConfig = await readFile(configPath, "utf8");
@@ -238,18 +265,37 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     ? migrateIR(parsedConfig.sourceIR as MCPForgeIR)
     : ir;
   const optimizedIR =
-    (parsedConfig.optimizedIR ? migrateIR(parsedConfig.optimizedIR as MCPForgeIR) : undefined) ??
-    (parsedConfig.optimized ? ir : undefined);
+    (parsedConfig.optimizedIR
+      ? migrateIR(parsedConfig.optimizedIR as MCPForgeIR)
+      : undefined) ?? (parsedConfig.optimized ? ir : undefined);
   const workflowIR =
-    (parsedConfig.workflowIR ? migrateIR(parsedConfig.workflowIR as MCPForgeIR) : undefined) ??
-    (parsedConfig.workflowEnabled ? ir : undefined);
-  const selectedTools = parsedConfig.selectedTools ?? getAllToolSelectionValues(ir);
-  const verification = parsedConfig.verification as VerificationMetadata | undefined;
+    (parsedConfig.workflowIR
+      ? migrateIR(parsedConfig.workflowIR as MCPForgeIR)
+      : undefined) ?? (parsedConfig.workflowEnabled ? ir : undefined);
+  const selectedTools =
+    parsedConfig.selectedTools ?? getAllToolSelectionValues(ir);
+  const verification = parsedConfig.verification as
+    VerificationMetadata | undefined;
   const expectedFinalIRHash = computeIRHash(ir);
+  let runtimeHash: string | undefined;
+  if (verification?.runtimeHash) {
+    try {
+      runtimeHash = (await generationIsCurrent(configDir))
+        ? await computeRuntimeHash(configDir)
+        : "outdated-generation";
+    } catch {
+      runtimeHash = "unavailable";
+    }
+  }
 
   return {
     configVersion: CURRENT_CONFIG_VERSION,
-    specSource: resolveSpecSourceForRuntime(parsedConfig.specSource, sourceType, outputDir, configDir),
+    specSource: resolveSpecSourceForRuntime(
+      parsedConfig.specSource,
+      sourceType,
+      outputDir,
+      configDir,
+    ),
     sourceType,
     apiName: resolveApiName(parsedConfig.apiName, ir),
     outputDir,
@@ -270,12 +316,15 @@ export async function loadConfig(configPath: string): Promise<LoadedMCPForgeConf
     hasSourceIR,
     hasOptimizedIR,
     hasWorkflowIR,
-    verificationState: resolveVerificationState(verification, ir),
+    verificationState: resolveVerificationState(verification, ir, runtimeHash),
     expectedFinalIRHash,
   };
 }
 
-export async function writeConfigFile(configPath: string, config: MCPForgeConfig): Promise<void> {
+export async function writeConfigFile(
+  configPath: string,
+  config: MCPForgeConfig,
+): Promise<void> {
   await writeFile(
     configPath,
     `${JSON.stringify({ ...config, configVersion: CURRENT_CONFIG_VERSION }, null, 2)}\n`,

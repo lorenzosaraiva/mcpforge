@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import {
+  applyReadOnlyPolicy,
   diffIR,
   generateTypeScriptMCPServer,
   inferIRFromDocs,
@@ -27,10 +28,12 @@ import {
 } from "../utils/config.js";
 import { promptConfirm } from "../utils/prompts.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
-import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  resolveSelectedToolsForIR,
-} from "../utils/tool-selection.js";
+  buildCandidateIR,
+  buildFinalIR,
+  getDefaultSelectedTools,
+} from "../utils/planning.js";
+import { resolveSelectedToolsForIR } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
@@ -62,15 +65,25 @@ function resolveMaxTools(
   configuredMaxTools: number | undefined,
   mode: "strict" | "standard",
 ): number {
-  if (typeof configuredMaxTools === "number" && Number.isFinite(configuredMaxTools) && configuredMaxTools > 0) {
+  if (
+    typeof configuredMaxTools === "number" &&
+    Number.isFinite(configuredMaxTools) &&
+    configuredMaxTools > 0
+  ) {
     return Math.floor(configuredMaxTools);
   }
-  return mode === "strict" ? DEFAULT_STRICT_MAX_TOOLS : DEFAULT_STANDARD_MAX_TOOLS;
+  return mode === "strict"
+    ? DEFAULT_STRICT_MAX_TOOLS
+    : DEFAULT_STANDARD_MAX_TOOLS;
 }
 
-function resolveOutputDirectory(configOutputDir: string, configDir: string): string {
+function resolveOutputDirectory(
+  configOutputDir: string,
+  configDir: string,
+): string {
   const looksLikeGeneratedProject =
-    existsSync(join(configDir, "src")) && existsSync(join(configDir, "package.json"));
+    existsSync(join(configDir, "src")) &&
+    existsSync(join(configDir, "package.json"));
 
   if (looksLikeGeneratedProject) {
     return configDir;
@@ -86,7 +99,9 @@ function assertOutputDirectoryUsable(outputDir: string): void {
     );
   }
 
-  const hasExpectedFiles = existsSync(join(outputDir, "src")) && existsSync(join(outputDir, "package.json"));
+  const hasExpectedFiles =
+    existsSync(join(outputDir, "src")) &&
+    existsSync(join(outputDir, "package.json"));
   if (!hasExpectedFiles) {
     throw new Error(
       `Output directory at ${outputDir} is missing expected generated files (src/ and package.json). Re-run "mcpforge init".`,
@@ -116,7 +131,9 @@ function toSpecSourceError(
 ): Error {
   const message = getErrorMessage(error);
   if (isHttpUrl(specSource) && looksLikeFetchError(message)) {
-    return new Error(`Could not fetch spec from ${specSource}. The URL may have changed.`);
+    return new Error(
+      `Could not fetch spec from ${specSource}. The URL may have changed.`,
+    );
   }
 
   if (sourceType === "docs-url") {
@@ -140,13 +157,18 @@ function toRiskEmoji(risk: DiffChange["risk"]): string {
 function colorizeRisk(value: string, risk: DiffChange["risk"]): string {
   const reset = "\u001B[0m";
   const color =
-    risk === "high" ? "\u001B[31m" : risk === "medium" ? "\u001B[33m" : "\u001B[32m";
+    risk === "high"
+      ? "\u001B[31m"
+      : risk === "medium"
+        ? "\u001B[33m"
+        : "\u001B[32m";
   return `${color}${value}${reset}`;
 }
 
 function formatChangeLine(change: DiffChange): string {
   const headline = `${toRiskEmoji(change.risk)} ${change.toolName} - ${change.method} ${change.path} - ${change.details}`;
-  const before = change.before !== undefined ? `   before: ${change.before}` : "";
+  const before =
+    change.before !== undefined ? `   before: ${change.before}` : "";
   const after = change.after !== undefined ? `   after: ${change.after}` : "";
   return [headline, before, after].filter(Boolean).join("\n");
 }
@@ -194,12 +216,15 @@ function resolveChangedOperationIds(
   result: DiffResult,
 ): Set<string> {
   const changed = new Set<string>();
-  const candidates = [...oldIR.tools, ...newIR.tools].filter((tool) => isEndpointTool(tool));
+  const candidates = [...oldIR.tools, ...newIR.tools].filter((tool) =>
+    isEndpointTool(tool),
+  );
 
   for (const change of result.changes) {
     for (const tool of candidates) {
       const matchesMethodPath =
-        tool.method.toUpperCase() === change.method.toUpperCase() && tool.path === change.path;
+        tool.method.toUpperCase() === change.method.toUpperCase() &&
+        tool.path === change.path;
       const matchesName = tool.name === change.toolName;
       if (!matchesMethodPath && !matchesName) {
         continue;
@@ -219,11 +244,18 @@ function printWorkflowImpacts(
   newSourceIR: MCPForgeIR,
   diffResult: DiffResult,
 ): void {
-  const changedOperationIds = resolveChangedOperationIds(oldSourceIR, newSourceIR, diffResult);
-  const impactedWorkflows = currentIR.tools.filter(isWorkflowTool).filter(
-    (tool) =>
-      tool.dependsOnOperationIds.some((operationId) => changedOperationIds.has(operationId)),
+  const changedOperationIds = resolveChangedOperationIds(
+    oldSourceIR,
+    newSourceIR,
+    diffResult,
   );
+  const impactedWorkflows = currentIR.tools
+    .filter(isWorkflowTool)
+    .filter((tool) =>
+      tool.dependsOnOperationIds.some((operationId) =>
+        changedOperationIds.has(operationId),
+      ),
+    );
 
   if (impactedWorkflows.length === 0) {
     return;
@@ -272,37 +304,59 @@ async function parseLatestIRFromSource(
   }
 }
 
-function shouldReoptimize(options: { optimize?: boolean }, config: LoadedMCPForgeConfig): boolean {
+function shouldReoptimize(
+  options: { optimize?: boolean },
+  config: LoadedMCPForgeConfig,
+): boolean {
   return options.optimize ?? config.optimized;
 }
 
 export function registerUpdateCommand(program: Command): void {
   program
     .command("update")
-    .description("Check for upstream spec changes and regenerate your server in place")
-    .option("--force", "Skip confirmation even when high-risk changes are detected")
+    .description(
+      "Check for upstream spec changes and regenerate your server in place",
+    )
+    .option(
+      "--force",
+      "Skip confirmation even when high-risk changes are detected",
+    )
     .option("--optimize", "Re-run optimization during regeneration")
-    .option("--no-optimize", "Skip optimization even if this project was previously optimized")
+    .option(
+      "--no-optimize",
+      "Skip optimization even if this project was previously optimized",
+    )
     .option("--pick", "Interactively re-pick which endpoints become tools")
     .option("--workflows", "Generate task-oriented workflow tools")
-    .option("--raw-endpoints", "Disable workflow planning and generate raw endpoint tools")
+    .option(
+      "--raw-endpoints",
+      "Disable workflow planning and generate raw endpoint tools",
+    )
+    .option(
+      "--read-only",
+      "Expose and enforce only GET, HEAD, and OPTIONS operations",
+    )
     .option("--dry-run", "Show what would change without regenerating files")
     .action(
-      async (
-        options: {
-          force?: boolean;
-          optimize?: boolean;
-          dryRun?: boolean;
-          pick?: boolean;
-          workflows?: boolean;
-          rawEndpoints?: boolean;
-        },
-      ) => {
-        if (process.argv.includes("--optimize") && process.argv.includes("--no-optimize")) {
+      async (options: {
+        force?: boolean;
+        optimize?: boolean;
+        dryRun?: boolean;
+        pick?: boolean;
+        workflows?: boolean;
+        rawEndpoints?: boolean;
+        readOnly?: boolean;
+      }) => {
+        if (
+          process.argv.includes("--optimize") &&
+          process.argv.includes("--no-optimize")
+        ) {
           throw new Error("Use either --optimize or --no-optimize, not both.");
         }
         if (options.workflows && options.rawEndpoints) {
-          throw new Error("Use either --workflows or --raw-endpoints, not both.");
+          throw new Error(
+            "Use either --workflows or --raw-endpoints, not both.",
+          );
         }
 
         intro("mcpforge update");
@@ -319,7 +373,9 @@ export function registerUpdateCommand(program: Command): void {
         configSpinner.start("Loading mcpforge config...");
         const config = await loadConfig(configPath);
         configSpinner.stop("Config loaded.");
-        const workflowEnabled = options.workflows ?? (options.rawEndpoints ? false : config.workflowEnabled);
+        const workflowEnabled =
+          options.workflows ??
+          (options.rawEndpoints ? false : config.workflowEnabled);
 
         const outputDir = resolveOutputDirectory(config.outputDir, configDir);
         assertOutputDirectoryUsable(outputDir);
@@ -330,9 +386,13 @@ export function registerUpdateCommand(program: Command): void {
             ? `Re-scraping docs and inferring API from: ${config.specSource}`
             : `Re-parsing spec: ${config.specSource}`,
         );
-        const latest = await parseLatestIRFromSource(config, (message) => log.warn(message));
+        const latest = await parseLatestIRFromSource(config, (message) =>
+          log.warn(message),
+        );
         refreshSpinner.stop(
-          config.sourceType === "docs-url" ? "Docs re-analysis completed." : "Spec parsed.",
+          config.sourceType === "docs-url"
+            ? "Docs re-analysis completed."
+            : "Spec parsed.",
         );
 
         const currentSelection = workflowEnabled
@@ -343,7 +403,9 @@ export function registerUpdateCommand(program: Command): void {
           : {
               ...config.sourceIR,
               tools: config.sourceIR.tools.filter((tool) =>
-                currentSelection.includes(tool.originalOperationId ?? tool.name),
+                currentSelection.includes(
+                  tool.originalOperationId ?? tool.name,
+                ),
               ),
             };
         const latestSelectedIR = workflowEnabled
@@ -351,7 +413,9 @@ export function registerUpdateCommand(program: Command): void {
           : {
               ...latest.ir,
               tools: latest.ir.tools.filter((tool) =>
-                currentSelection.includes(tool.originalOperationId ?? tool.name),
+                currentSelection.includes(
+                  tool.originalOperationId ?? tool.name,
+                ),
               ),
             };
 
@@ -365,7 +429,8 @@ export function registerUpdateCommand(program: Command): void {
         diffSpinner.stop("Diff completed.");
 
         const hasChanges = result.summary.totalChanges > 0;
-        const pickerEnabled = Boolean(options.pick) && !isNonInteractiveRuntime();
+        const pickerEnabled =
+          Boolean(options.pick) && !isNonInteractiveRuntime();
         if (hasChanges) {
           printFormattedDiff(result);
           if (workflowEnabled) {
@@ -418,10 +483,15 @@ export function registerUpdateCommand(program: Command): void {
           ? shouldReoptimize({ optimize: options.optimize }, config)
           : Boolean(options.optimize);
         const canReuseStoredOptimization =
-          !hasChanges && !runOptimization && config.optimized && config.optimizedIR !== undefined;
+          !hasChanges &&
+          !runOptimization &&
+          config.optimized &&
+          config.optimizedIR !== undefined;
 
         let optimized = canReuseStoredOptimization;
-        let optimizedIR = canReuseStoredOptimization ? config.optimizedIR : undefined;
+        let optimizedIR = canReuseStoredOptimization
+          ? config.optimizedIR
+          : undefined;
 
         if (runOptimization) {
           const optimizeSpinner = spinner();
@@ -456,7 +526,10 @@ export function registerUpdateCommand(program: Command): void {
           workflowEnabled,
           maxTools: config.maxTools,
         });
-        let selectedTools = resolveSelectedToolsForIR(candidateIR, config.selectedTools);
+        let selectedTools = resolveSelectedToolsForIR(
+          candidateIR,
+          config.selectedTools,
+        );
 
         if (pickerEnabled) {
           const defaultSelectedTools = workflowEnabled
@@ -479,7 +552,7 @@ export function registerUpdateCommand(program: Command): void {
           );
         }
 
-        const finalIR = buildFinalIR({
+        let finalIR = buildFinalIR({
           sourceIR: latest.ir,
           optimizedIR: optimized ? optimizedIR : undefined,
           workflowEnabled,
@@ -487,6 +560,9 @@ export function registerUpdateCommand(program: Command): void {
           selectedTools,
         });
 
+        if (options.readOnly || config.ir.executionPolicy?.readOnly)
+          finalIR = applyReadOnlyPolicy(finalIR, latest.ir);
+        selectedTools = resolveSelectedToolsForIR(finalIR, selectedTools);
         const generateSpinner = spinner();
         generateSpinner.start(`Regenerating server in ${outputDir}...`);
         await generateTypeScriptMCPServer(finalIR, {
@@ -513,7 +589,9 @@ export function registerUpdateCommand(program: Command): void {
           sourceIR: latest.ir,
           ...(optimized && optimizedIR ? { optimizedIR } : {}),
           ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
-          ...(config.sourceType === "docs-url" ? { scrapedDocs: latest.scrapedDocs } : {}),
+          ...(config.sourceType === "docs-url"
+            ? { scrapedDocs: latest.scrapedDocs }
+            : {}),
         };
         await writeConfigFile(configPath, updatedConfig);
 
@@ -528,15 +606,24 @@ export function registerUpdateCommand(program: Command): void {
         );
 
         if (updatedConfig.registrySlug && !isNonInteractiveRuntime()) {
-          const republish = await promptConfirm("Re-publish updated server to registry? (y/N)", false);
+          const republish = await promptConfirm(
+            "Re-publish updated server to registry? (y/N)",
+            false,
+          );
           if (republish) {
             const publishSpinner = spinner();
-            publishSpinner.start(`Publishing ${updatedConfig.registrySlug} back to the registry...`);
-            const publishResult = await publishProjectToRegistry(configDir, {
-              slug: updatedConfig.registrySlug,
-            }, {
-              onWarning: (message) => log.warn(message),
-            });
+            publishSpinner.start(
+              `Publishing ${updatedConfig.registrySlug} back to the registry...`,
+            );
+            const publishResult = await publishProjectToRegistry(
+              configDir,
+              {
+                slug: updatedConfig.registrySlug,
+              },
+              {
+                onWarning: (message) => log.warn(message),
+              },
+            );
             publishSpinner.stop(
               publishResult.directPush
                 ? `Published ${publishResult.slug}@${publishResult.version}.`

@@ -26,7 +26,12 @@ function formatVerificationBadge(entry: RegistryIndexEntry): string {
     return "unverified";
   }
 
-  return `verified ${entry.verification.verifiedAt}`;
+  if (
+    entry.verification.compatibilityVersion !== "3" ||
+    !entry.verification.runtimeHash
+  )
+    return `legacy ${entry.verification.mode} report`;
+  return `${entry.verification.mode} ${entry.verification.skippedToolCount ? "partial" : "verified"} ${entry.verification.verifiedAt}`;
 }
 
 function padRight(value: string, width: number): string {
@@ -41,16 +46,30 @@ export function searchRegistryEntries(
   return filterRegistryEntries(index.entries, query, tags);
 }
 
-export function formatRegistrySearchResults(entries: readonly RegistryIndexEntry[]): string {
+export function formatRegistrySearchResults(
+  entries: readonly RegistryIndexEntry[],
+): string {
   if (entries.length === 0) {
     return "";
   }
 
-  const slugWidth = Math.max(...entries.map((entry) => entry.slug.length), 8) + 2;
-  const nameWidth = Math.max(...entries.map((entry) => entry.name.length), 20) + 2;
-  const toolsWidth = Math.max(...entries.map((entry) => `${entry.toolCount} tools`.length), 8) + 2;
-  const capabilityWidth = Math.max(...entries.map((entry) => formatCapabilityBadge(entry).length), 12) + 2;
-  const verificationWidth = Math.max(...entries.map((entry) => formatVerificationBadge(entry).length), 12) + 2;
+  const slugWidth =
+    Math.max(...entries.map((entry) => entry.slug.length), 8) + 2;
+  const nameWidth =
+    Math.max(...entries.map((entry) => entry.name.length), 20) + 2;
+  const toolsWidth =
+    Math.max(...entries.map((entry) => `${entry.toolCount} tools`.length), 8) +
+    2;
+  const capabilityWidth =
+    Math.max(
+      ...entries.map((entry) => formatCapabilityBadge(entry).length),
+      12,
+    ) + 2;
+  const verificationWidth =
+    Math.max(
+      ...entries.map((entry) => formatVerificationBadge(entry).length),
+      12,
+    ) + 2;
 
   return entries
     .map(
@@ -67,24 +86,37 @@ export function registerSearchCommand(program: Command): void {
     .description("Browse the public MCPForge registry")
     .option("--tags <a,b>", "Filter by one or more tags")
     .option("--json", "Print raw JSON")
-    .action(async (query: string | undefined, options: { tags?: string; json?: boolean }) => {
-      const index = await fetchRegistryIndex();
-      const results = searchRegistryEntries(index, query, parseCsvOption(options.tags));
+    .action(
+      async (
+        query: string | undefined,
+        options: { tags?: string; json?: boolean },
+      ) => {
+        const index = await fetchRegistryIndex();
+        const results = searchRegistryEntries(
+          index,
+          query,
+          parseCsvOption(options.tags),
+        );
 
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
-        return;
-      }
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+          return;
+        }
 
-      intro("mcpforge search");
+        intro("mcpforge search");
 
-      if (results.length === 0) {
-        note("No registry entries matched your filters.", "No Results");
-        outro("Try a broader keyword or run `mcpforge search` with no filters.");
-        return;
-      }
+        if (results.length === 0) {
+          note("No registry entries matched your filters.", "No Results");
+          outro(
+            "Try a broader keyword or run `mcpforge search` with no filters.",
+          );
+          return;
+        }
 
-      process.stdout.write(`${formatRegistrySearchResults(results)}\n`);
-      outro(`Found ${results.length} registry entr${results.length === 1 ? "y" : "ies"}.`);
-    });
+        process.stdout.write(`${formatRegistrySearchResults(results)}\n`);
+        outro(
+          `Found ${results.length} registry entr${results.length === 1 ? "y" : "ies"}.`,
+        );
+      },
+    );
 }

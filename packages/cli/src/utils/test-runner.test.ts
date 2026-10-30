@@ -1,8 +1,55 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { describe, expect, it, vi } from "vitest";
 
-import { toStructuredOutputSchema, type EndpointToolDefinition } from "../core.js";
-import { runRegistrationTests } from "./test-runner.js";
+import {
+  toStructuredOutputSchema,
+  type EndpointToolDefinition,
+} from "../core.js";
+import { runRegistrationTests, sampleValueFromSchema } from "./test-runner.js";
+
+describe("compatibility response samples", () => {
+  it("honors literal anchored URL path patterns in provider list responses", () => {
+    expect(
+      sampleValueFromSchema(
+        { type: "string", pattern: "^/v1/customers" },
+        "url",
+      ),
+    ).toBe("/v1/customers");
+    expect(
+      sampleValueFromSchema(
+        { type: "string", pattern: "^/v1/invoices$" },
+        "url",
+      ),
+    ).toBe("/v1/invoices");
+  });
+  it("honors enum constraints before nullable type hints", () => {
+    expect(
+      sampleValueFromSchema({
+        type: ["string", "null"],
+        enum: ["completed", "not_planned"],
+      }),
+    ).toBe("completed");
+  });
+  it("supplies required fields without explicit property schemas and follows local references", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        first: { type: "string", enum: ["expected"] },
+        second: { $ref: "#/properties/first" },
+      },
+      required: ["first", "second", "unspecified"],
+    };
+    expect(
+      sampleValueFromSchema(schema, undefined, {
+        includeOptionalObjectProperties: true,
+      }),
+    ).toMatchObject({
+      first: "expected",
+      second: "expected",
+      unspecified: expect.any(String),
+    });
+  });
+});
 
 function createTool(): EndpointToolDefinition {
   return {
@@ -28,7 +75,10 @@ function createTool(): EndpointToolDefinition {
   };
 }
 
-function createClient(tool: EndpointToolDefinition, outputSchema: Record<string, unknown> | undefined): Client {
+function createClient(
+  tool: EndpointToolDefinition,
+  outputSchema: Record<string, unknown> | undefined,
+): Client {
   return {
     listTools: vi.fn(async () => ({
       tools: [
@@ -66,7 +116,9 @@ describe("runRegistrationTests", () => {
 
   it("reports a missing structured output schema", async () => {
     const tool = createTool();
-    const results = await runRegistrationTests(createClient(tool, undefined), [tool]);
+    const results = await runRegistrationTests(createClient(tool, undefined), [
+      tool,
+    ]);
 
     expect(results).toEqual([
       expect.objectContaining({
