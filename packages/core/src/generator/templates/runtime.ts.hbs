@@ -7,6 +7,7 @@ export interface AuthState {
 }
 
 export interface ToolHandlerContext {
+  readOnly?: boolean;
   baseUrl: string;
   forceBaseUrl?: boolean;
   auth?: AuthState;
@@ -477,6 +478,9 @@ export async function invokeEndpoint(
   input: Record<string, unknown>,
   context: ToolHandlerContext,
 ): Promise<unknown> {
+  if ((context.readOnly || process.env.MCPFORGE_READ_ONLY === "1") && !["GET", "HEAD", "OPTIONS"].includes(endpoint.method.toUpperCase())) {
+    throw new Error("This operation is blocked by the read-only HTTP method policy.");
+  }
   let resolvedPath = endpoint.path;
 
   for (const param of endpoint.pathParams) {

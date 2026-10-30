@@ -14,15 +14,13 @@ export interface InferFromDocsOptions {
   apiKey?: string;
   model?: string;
   maxTokens?: number;
-  temperature?: number;
   logger?: (message: string) => void;
   maxCharsPerChunk?: number;
   maxCharsPerPage?: number;
 }
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_MODEL = "claude-sonnet-5-5";
 const DEFAULT_MAX_TOKENS = 8192;
-const DEFAULT_TEMPERATURE = 0.2;
 const DEFAULT_MAX_CHARS_PER_CHUNK = 550_000;
 const DEFAULT_MAX_CHARS_PER_PAGE = 60_000;
 
@@ -95,14 +93,18 @@ function normalizePath(path: string): string {
 
 function normalizeParamType(rawType: string): string {
   const type = rawType.trim().toLowerCase();
-  if (["string", "integer", "boolean", "number", "array", "object"].includes(type)) {
+  if (
+    ["string", "integer", "boolean", "number", "array", "object"].includes(type)
+  ) {
     return type;
   }
   return "string";
 }
 
 function deriveOperationId(method: string, path: string): string {
-  const fromPath = `${method.toLowerCase()}_${path}`.replace(/[{}]/g, "").replace(/\//g, "_");
+  const fromPath = `${method.toLowerCase()}_${path}`
+    .replace(/[{}]/g, "")
+    .replace(/\//g, "_");
   return toSnakeCase(fromPath);
 }
 
@@ -130,7 +132,11 @@ function inferHeaderName(auth: InferredStructure["auth"]): string | undefined {
   if (auth.type === "api-key") {
     return "X-API-Key";
   }
-  if (auth.type === "bearer" || auth.type === "oauth2" || auth.type === "basic") {
+  if (
+    auth.type === "bearer" ||
+    auth.type === "oauth2" ||
+    auth.type === "basic"
+  ) {
     return "Authorization";
   }
   return undefined;
@@ -170,12 +176,16 @@ function endpointConfidenceScore(endpoint: InferredEndpoint): number {
   let score = 0;
   score += endpoint.parameters.length * 2;
   score += endpoint.requestBody ? 5 : 0;
-  score += endpoint.description ? Math.min(endpoint.description.length / 80, 5) : 0;
+  score += endpoint.description
+    ? Math.min(endpoint.description.length / 80, 5)
+    : 0;
   score += endpoint.summary ? 1 : 0;
   return score;
 }
 
-function mergeInferredStructures(chunks: InferredStructure[]): InferredStructure {
+function mergeInferredStructures(
+  chunks: InferredStructure[],
+): InferredStructure {
   const first = chunks[0] ?? {
     apiName: "Inferred API",
     apiDescription: "API inferred from documentation pages.",
@@ -195,7 +205,10 @@ function mergeInferredStructures(chunks: InferredStructure[]): InferredStructure
     for (const endpoint of chunk.endpoints) {
       const key = `${endpoint.method.toUpperCase()} ${normalizePath(endpoint.path)}`;
       const existing = endpointByMethodPath.get(key);
-      if (!existing || endpointConfidenceScore(endpoint) > endpointConfidenceScore(existing)) {
+      if (
+        !existing ||
+        endpointConfidenceScore(endpoint) > endpointConfidenceScore(existing)
+      ) {
         endpointByMethodPath.set(key, endpoint);
       }
     }
@@ -206,15 +219,19 @@ function mergeInferredStructures(chunks: InferredStructure[]): InferredStructure
     authCandidates.find((auth) => auth.type !== "none") ?? first.auth;
 
   return {
-    apiName: chunks
-      .map((chunk) => chunk.apiName.trim())
-      .find((name) => name.length > 0) ?? first.apiName,
-    apiDescription: chunks
-      .map((chunk) => chunk.apiDescription.trim())
-      .sort((left, right) => right.length - left.length)[0] ?? first.apiDescription,
-    baseUrl: chunks
-      .map((chunk) => chunk.baseUrl.trim())
-      .find((value) => /^https?:\/\//i.test(value)) ?? first.baseUrl,
+    apiName:
+      chunks
+        .map((chunk) => chunk.apiName.trim())
+        .find((name) => name.length > 0) ?? first.apiName,
+    apiDescription:
+      chunks
+        .map((chunk) => chunk.apiDescription.trim())
+        .sort((left, right) => right.length - left.length)[0] ??
+      first.apiDescription,
+    baseUrl:
+      chunks
+        .map((chunk) => chunk.baseUrl.trim())
+        .find((value) => /^https?:\/\//i.test(value)) ?? first.baseUrl,
     auth: selectedAuth,
     endpoints: [...endpointByMethodPath.values()],
   };
@@ -230,17 +247,24 @@ function toToolDefinition(endpoint: InferredEndpoint): EndpointToolDefinition {
   const summary = endpoint.summary?.trim() ?? "";
   const description = endpoint.description?.trim() ?? "";
   const resolvedDescription = truncateText(
-    [summary, description].filter(Boolean).join(" ").trim() || `${method} ${path}`,
+    [summary, description].filter(Boolean).join(" ").trim() ||
+      `${method} ${path}`,
     260,
   );
 
-  const parameters: ToolParameter[] = endpoint.parameters.map((parameter: InferredEndpoint["parameters"][number]) => ({
-    name: parameter.name.trim(),
-    description: truncateText(parameter.description || `${parameter.location} parameter "${parameter.name}"`, 180),
-    type: normalizeParamType(parameter.type),
-    required: parameter.required === true,
-    location: parameter.location,
-  }));
+  const parameters: ToolParameter[] = endpoint.parameters.map(
+    (parameter: InferredEndpoint["parameters"][number]) => ({
+      name: parameter.name.trim(),
+      description: truncateText(
+        parameter.description ||
+          `${parameter.location} parameter "${parameter.name}"`,
+        180,
+      ),
+      type: normalizeParamType(parameter.type),
+      required: parameter.required === true,
+      location: parameter.location,
+    }),
+  );
 
   return {
     kind: "endpoint",
@@ -269,11 +293,14 @@ function toToolDefinition(endpoint: InferredEndpoint): EndpointToolDefinition {
 }
 
 function toIR(inferred: InferredStructure): MCPForgeIR {
-  const tools = inferred.endpoints.map((endpoint) => toToolDefinition(endpoint));
+  const tools = inferred.endpoints.map((endpoint) =>
+    toToolDefinition(endpoint),
+  );
   return {
     apiName: inferred.apiName.trim() || "Inferred API",
     apiDescription:
-      inferred.apiDescription.trim() || "API inferred from documentation pages.",
+      inferred.apiDescription.trim() ||
+      "API inferred from documentation pages.",
     baseUrl: inferred.baseUrl.trim() || "http://localhost",
     auth: toIRAuth(inferred.auth),
     tools,
@@ -281,7 +308,10 @@ function toIR(inferred: InferredStructure): MCPForgeIR {
   };
 }
 
-function preparePageContent(page: ScrapedDocPage, maxCharsPerPage: number): ScrapedDocPage {
+function preparePageContent(
+  page: ScrapedDocPage,
+  maxCharsPerPage: number,
+): ScrapedDocPage {
   const normalizedContent = page.content.trim();
   if (normalizedContent.length <= maxCharsPerPage) {
     return { ...page, content: normalizedContent };
@@ -299,14 +329,19 @@ function chunkScrapedDocs(
   maxCharsPerChunk: number,
   maxCharsPerPage: number,
 ): ScrapedDocPage[][] {
-  const preparedPages = pages.map((page) => preparePageContent(page, maxCharsPerPage));
+  const preparedPages = pages.map((page) =>
+    preparePageContent(page, maxCharsPerPage),
+  );
   const chunks: ScrapedDocPage[][] = [];
   let currentChunk: ScrapedDocPage[] = [];
   let currentChars = 0;
 
   for (const page of preparedPages) {
     const pageChars = page.content.length + page.url.length + 48;
-    if (currentChunk.length > 0 && currentChars + pageChars > maxCharsPerChunk) {
+    if (
+      currentChunk.length > 0 &&
+      currentChars + pageChars > maxCharsPerChunk
+    ) {
       chunks.push(currentChunk);
       currentChunk = [];
       currentChars = 0;
@@ -328,14 +363,13 @@ function buildInferencePrompt(
   totalChunks: number,
 ): string {
   const docsBlock = pages
-    .map(
-      (page, index) =>
-        [
-          `### Documentation Page ${index + 1}`,
-          `URL: ${page.url}`,
-          "Content:",
-          page.content,
-        ].join("\n"),
+    .map((page, index) =>
+      [
+        `### Documentation Page ${index + 1}`,
+        `URL: ${page.url}`,
+        "Content:",
+        page.content,
+      ].join("\n"),
     )
     .join("\n\n");
 
@@ -409,9 +443,8 @@ async function inferChunk(
 ): Promise<InferredStructure> {
   const prompt = buildInferencePrompt(pages, chunkIndex, totalChunks);
   const response = await client.messages.create({
-    model: options.model ?? DEFAULT_MODEL,
+    model: options.model ?? process.env.MCPFORGE_AI_MODEL ?? DEFAULT_MODEL,
     max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
-    temperature: options.temperature ?? DEFAULT_TEMPERATURE,
     system:
       "You are an expert API designer who specializes in reverse-engineering REST APIs from documentation for LLM tool interfaces. Output only strict JSON when requested.",
     messages: [
@@ -428,7 +461,9 @@ async function inferChunk(
     .trim();
 
   if (!text) {
-    throw new Error(`AI inferrer returned empty response for chunk ${chunkIndex + 1}.`);
+    throw new Error(
+      `AI inferrer returned empty response for chunk ${chunkIndex + 1}.`,
+    );
   }
 
   let parsed: unknown;
@@ -453,14 +488,17 @@ export async function inferIRFromDocs(
   const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    throw new Error("--from-url requires ANTHROPIC_API_KEY to infer API structure from documentation.");
+    throw new Error(
+      "--from-url requires ANTHROPIC_API_KEY to infer API structure from documentation.",
+    );
   }
 
   if (pages.length === 0) {
     throw new Error("No scraped documentation pages were provided.");
   }
 
-  const maxCharsPerChunk = options.maxCharsPerChunk ?? DEFAULT_MAX_CHARS_PER_CHUNK;
+  const maxCharsPerChunk =
+    options.maxCharsPerChunk ?? DEFAULT_MAX_CHARS_PER_CHUNK;
   const maxCharsPerPage = options.maxCharsPerPage ?? DEFAULT_MAX_CHARS_PER_PAGE;
   const chunks = chunkScrapedDocs(pages, maxCharsPerChunk, maxCharsPerPage);
   const client = new Anthropic({ apiKey });
@@ -471,7 +509,13 @@ export async function inferIRFromDocs(
     logger(
       `[mcpforge] Inferring API structure from docs chunk ${index + 1}/${chunks.length} (${chunkPages.length} page(s)).`,
     );
-    const inferredChunk = await inferChunk(client, chunkPages, index, chunks.length, options);
+    const inferredChunk = await inferChunk(
+      client,
+      chunkPages,
+      index,
+      chunks.length,
+      options,
+    );
     chunkResults.push(inferredChunk);
   }
 

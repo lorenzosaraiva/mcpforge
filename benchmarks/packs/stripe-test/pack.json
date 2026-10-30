@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "stripe-test",
+  "tasks": [
+    {
+      "id": "stripe-test-1",
+      "prompt": "List Stripe customers",
+      "operationId": "GetCustomers"
+    },
+    {
+      "id": "stripe-test-2",
+      "prompt": "Retrieve a Stripe customer",
+      "operationId": "GetCustomersCustomer"
+    },
+    {
+      "id": "stripe-test-3",
+      "prompt": "List customer invoices",
+      "operationId": "GetInvoices"
+    },
+    {
+      "id": "stripe-test-4",
+      "prompt": "Retrieve an invoice",
+      "operationId": "GetInvoicesInvoice"
+    },
+    {
+      "id": "stripe-test-5",
+      "prompt": "List payment intents",
+      "operationId": "GetPaymentIntents"
+    },
+    {
+      "id": "stripe-test-6",
+      "prompt": "Retrieve a payment intent",
+      "operationId": "GetPaymentIntentsIntent"
+    },
+    {
+      "id": "stripe-test-7",
+      "prompt": "List products",
+      "operationId": "GetProducts"
+    },
+    {
+      "id": "stripe-test-8",
+      "prompt": "List prices",
+      "operationId": "GetPrices"
+    },
+    {
+      "id": "stripe-test-9",
+      "prompt": "List subscriptions",
+      "operationId": "GetSubscriptions"
+    },
+    {
+      "id": "stripe-test-10",
+      "prompt": "Retrieve the Stripe balance",
+      "operationId": "GetBalance"
+    }
+  ],
+  "provenance": {
+    "kind": "upstream-excerpt",
+    "repository": "stripe/openapi",
+    "commit": "51610f5f061c9723730582a7638b8cc0e646640d",
+    "sourceUrl": "https://raw.githubusercontent.com/stripe/openapi/51610f5f061c9723730582a7638b8cc0e646640d/openapi/spec3.json",
+    "sourceSha256": "7cff4cc46d0654101a36a3302f7544640f5f73e4f3cad6f264f0e23c19fa1776",
+    "specSha256": "bce22fa54afd98539d72345ef9806c72c41e10756b0b76b1f102d59b9f979a28",
+    "transformations": [
+      "Select the listed GET operations plus three catalog distractors",
+      "Include transitive component references",
+      "Truncate descriptions to 400 characters and remove examples and vendor extensions",
+      "Restrict annotated expandable fields to default string IDs and omit expand query parameters; expanded Stripe responses are outside this pack",
+      "Replace selected operation descriptions with reviewed task summaries"
+    ],
+    "verification": "local mock only; no live GitHub or Stripe requests",
+    "licenseUrl": "https://github.com/stripe/openapi/blob/51610f5f061c9723730582a7638b8cc0e646640d/LICENSE"
+  }
+}

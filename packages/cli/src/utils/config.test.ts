@@ -45,6 +45,8 @@ describe("resolveVerificationState", () => {
           verifiedAt: "2026-04-08T12:00:00.000Z",
           compatibilityVersion: CURRENT_COMPATIBILITY_VERSION,
           finalIRHash: computeIRHash(fixtureIR),
+          runtimeHash: "fixture-runtime",
+          generatorVersion: "2",
         },
         fixtureIR,
       ),
@@ -75,21 +77,38 @@ describe("resolveVerificationState", () => {
     const configPath = join(directory, "mcpforge.config.json");
     const legacyIR = {
       ...fixtureIR,
-      auth: { type: "api-key", envVarName: "API_KEY", parameterName: "X-Key", location: "header", required: true },
+      auth: {
+        type: "api-key",
+        envVarName: "API_KEY",
+        parameterName: "X-Key",
+        location: "header",
+        required: true,
+      },
     };
-    await writeFile(configPath, JSON.stringify({
-      specSource: "spec.json",
-      ir: legacyIR,
-      verification: { status: "passed", mode: "mock", verifiedAt: "2026-01-01", compatibilityVersion: "1", finalIRHash: computeIRHash(legacyIR) },
-    }));
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        specSource: "spec.json",
+        ir: legacyIR,
+        verification: {
+          status: "passed",
+          mode: "mock",
+          verifiedAt: "2026-01-01",
+          compatibilityVersion: "1",
+          finalIRHash: computeIRHash(legacyIR),
+        },
+      }),
+    );
     try {
       const loaded = await loadConfig(configPath);
       expect(loaded.configVersion).toBe(2);
       expect(loaded.ir.irVersion).toBe(2);
       expect(loaded.ir.securitySchemes).toEqual({ legacy: legacyIR.auth });
-      expect(loaded.ir.tools[0]?.kind === "endpoint" ? loaded.ir.tools[0].securityRequirements : undefined).toEqual([
-        { schemes: [{ scheme: "legacy", scopes: [] }] },
-      ]);
+      expect(
+        loaded.ir.tools[0]?.kind === "endpoint"
+          ? loaded.ir.tools[0].securityRequirements
+          : undefined,
+      ).toEqual([{ schemes: [{ scheme: "legacy", scopes: [] }] }]);
       expect(loaded.verificationState).toBe("stale");
     } finally {
       await rm(directory, { recursive: true, force: true });

@@ -1,4 +1,9 @@
 export {
+  GENERATOR_RUNTIME_VERSION,
+  getGeneratorIdentity,
+  applyReadOnlyPolicy,
+  isReadOnlyTool,
+  toolAnnotations,
   diffIR,
   generateTypeScriptMCPServer,
   inferIRFromDocs,
@@ -9,6 +14,7 @@ export {
   planWorkflowTools,
   scrapeDocsFromUrl,
   toJsonSchema,
+  rebaseJsonSchema,
   toStructuredOutputSchema,
   truncateText,
 } from "@mcpforge/core";

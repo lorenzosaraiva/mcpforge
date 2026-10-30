@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 
 import { registerAddCommand } from "./commands/add.js";
 import { registerConnectCommand } from "./commands/connect.js";
+import { registerDoctorCommand } from "./commands/doctor.js";
+import { registerDisconnectCommand } from "./commands/disconnect.js";
 import { registerAuthCommand } from "./commands/auth.js";
 import { registerDiffCommand } from "./commands/diff.js";
 import { registerGenerateCommand } from "./commands/generate.js";
@@ -17,7 +19,9 @@ import { registerUpdateCommand } from "./commands/update.js";
 
 const program = new Command();
 const packageVersion = (
-  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }
+  JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version: string }
 ).version;
 
 program
@@ -27,6 +31,8 @@ program
 
 registerInitCommand(program);
 registerConnectCommand(program);
+registerDoctorCommand(program);
+registerDisconnectCommand(program);
 registerGenerateCommand(program);
 registerInspectCommand(program);
 registerDiffCommand(program);

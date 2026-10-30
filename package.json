@@ -1,12 +1,13 @@
 {
   "name": "mcpforge",
   "private": true,
-  "version": "1.2.0",
+  "type": "module",
+  "version": "2.0.0-rc.1",
   "description": "Generate production-ready MCP servers from OpenAPI specs.",
   "author": "Lorenzo",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "repository": {
     "type": "git",
@@ -29,18 +30,21 @@
     "esbuild": "0.28.2"
   },
   "scripts": {
-    "build": "npm run build -w @mcpforge/core && npm run build -w mcpforge",
+    "build": "npm run build -w @mcpforge/core && npm run build -w mcpforge && tsc -p scripts/tsconfig.json",
     "dev": "tsx packages/cli/src/index.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8",
     "registry:validate": "node scripts/validate-registry.mjs",
     "release:validate": "node scripts/validate-release.mjs",
-    "test:package": "node scripts/package-smoke.mjs"
+    "test:package": "node scripts/package-smoke.mjs",
+    "benchmark:contracts": "tsx scripts/evaluate-task-packs.ts --mode contract",
+    "benchmark:model": "tsx scripts/evaluate-task-packs.ts --mode model"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.0.4",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.12"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4",
+    "esbuild": "0.28.2"
   }
 }

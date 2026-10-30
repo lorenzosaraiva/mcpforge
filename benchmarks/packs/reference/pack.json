@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "reference",
+  "tasks": [
+    {
+      "id": "reference-1",
+      "operationId": "listCustomers",
+      "prompt": "List customers"
+    },
+    {
+      "id": "reference-2",
+      "operationId": "createCustomer",
+      "prompt": "Create a customer"
+    },
+    {
+      "id": "reference-3",
+      "operationId": "getCustomer",
+      "prompt": "Get a customer by ID"
+    },
+    {
+      "id": "reference-4",
+      "operationId": "listOrders",
+      "prompt": "List orders"
+    },
+    {
+      "id": "reference-5",
+      "operationId": "createOrder",
+      "prompt": "Create an order"
+    },
+    {
+      "id": "reference-6",
+      "operationId": "getOrder",
+      "prompt": "Retrieve an order by ID"
+    },
+    {
+      "id": "reference-7",
+      "operationId": "refundOrder",
+      "prompt": "Refund an order"
+    },
+    {
+      "id": "reference-8",
+      "operationId": "listProducts",
+      "prompt": "List products"
+    },
+    {
+      "id": "reference-9",
+      "operationId": "getInventory",
+      "prompt": "Check inventory for a SKU"
+    },
+    {
+      "id": "reference-10",
+      "operationId": "getSummary",
+      "prompt": "Get the sales summary"
+    }
+  ],
+  "provenance": {
+    "kind": "hand-authored-reference-api",
+    "specSha256": "26194fb6c11f80121952a7c551a42fbef8b616f298c86d01837fa09a04e64d85",
+    "verification": "Local mock only; reference.mcpforge.invalid is not a live provider",
+    "license": "MIT"
+  }
+}

@@ -11,7 +11,8 @@ import { generateTypeScriptMCPServer } from "./typescript-generator.js";
 const tempDirs: string[] = [];
 
 function createEndpointTool(
-  overrides: Partial<EndpointToolDefinition> & Pick<EndpointToolDefinition, "name" | "method" | "path">,
+  overrides: Partial<EndpointToolDefinition> &
+    Pick<EndpointToolDefinition, "name" | "method" | "path">,
 ): EndpointToolDefinition {
   return {
     kind: "endpoint",
@@ -39,10 +40,31 @@ function createIR(tools: EndpointToolDefinition[]): MCPForgeIR {
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe("generateTypeScriptMCPServer", () => {
+  it("rejects GET bodies that the Fetch runtime cannot send", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "mcpforge-get-body-"));
+    tempDirs.push(outputDir);
+    const ir = createIR([
+      createEndpointTool({
+        name: "search",
+        method: "GET",
+        path: "/search",
+        requestBody: {
+          contentType: "application/json",
+          required: true,
+          schema: { type: "object" },
+        },
+      }),
+    ]);
+    await expect(
+      generateTypeScriptMCPServer(ir, { outputDir }),
+    ).rejects.toThrow("GET request body");
+  });
   it("writes workflow runtime and handler files", async () => {
     const sourceIR = createIR([
       createEndpointTool({
@@ -67,7 +89,10 @@ describe("generateTypeScriptMCPServer", () => {
             properties: {
               customers: {
                 type: "array",
-                items: { type: "object", properties: { id: { type: "string" } } },
+                items: {
+                  type: "object",
+                  properties: { id: { type: "string" } },
+                },
               },
             },
             required: ["customers"],
@@ -90,10 +115,22 @@ describe("generateTypeScriptMCPServer", () => {
       sourceIR,
     });
 
-    const envExampleContent = await readFile(join(outputDir, ".env.example"), "utf8");
-    const runtimeContent = await readFile(join(outputDir, "src", "runtime.ts"), "utf8");
-    const indexContent = await readFile(join(outputDir, "src", "index.ts"), "utf8");
-    const handlerContent = await readFile(join(outputDir, "src", "tools", "find_customers.ts"), "utf8");
+    const envExampleContent = await readFile(
+      join(outputDir, ".env.example"),
+      "utf8",
+    );
+    const runtimeContent = await readFile(
+      join(outputDir, "src", "runtime.ts"),
+      "utf8",
+    );
+    const indexContent = await readFile(
+      join(outputDir, "src", "index.ts"),
+      "utf8",
+    );
+    const handlerContent = await readFile(
+      join(outputDir, "src", "tools", "find_customers.ts"),
+      "utf8",
+    );
 
     expect(envExampleContent).toContain("API_BASE_URL=https://api.example.com");
     expect(runtimeContent).toContain("export async function invokeEndpoint");

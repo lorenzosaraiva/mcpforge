@@ -5,7 +5,7 @@
 Generate MCP servers from OpenAPI specs or docs pages, then verify generated request compatibility before you publish or install them.
 
 [![npm version](https://img.shields.io/npm/v/mcpforge.svg)](https://www.npmjs.com/package/mcpforge)
-[![Release 1.2.0](https://img.shields.io/badge/release-1.2.0-blue.svg)](./CHANGELOG.md)
+[![Release 2.0.0-rc.1](https://img.shields.io/badge/release-2.0.0--rc.1-blue.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Demo
@@ -24,6 +24,17 @@ MCPForge does two extra things:
 The result is closer to "brief the model on the jobs it can do" than "dump the entire REST spec into MCP."
 
 ## Quick Start
+
+The 2.0 release candidate requires **Node 22.19+** (Node 24 LTS recommended). It adds managed connections for Cursor, Claude Desktop, and VS Code, read-only generation, runtime-bound verification, `doctor`, and `disconnect`. This source checkout contains the candidate; npm publication and external onboarding trials are separate release gates.
+
+```bash
+npm ci
+npm run build
+npm run dev -- connect ./openapi.yaml --client cursor --read-only
+npm run dev -- doctor --dir ./mcp-server-example
+```
+
+See [the 2.0 guide](./docs/MCPFORGE-2.md) for client formats, diagnosis, migration, and removal, [first tasks](./docs/FIRST-TASKS.md) for GitHub and Stripe sandbox setup, and [the evaluation guide](./benchmarks/README.md) for reproducible task evidence.
 
 Connect an API to the current Cursor project:
 
@@ -108,6 +119,8 @@ mcpforge publish --slug my-api --tags payments,billing
 | Command | What it does |
 |---------|---------------|
 | `mcpforge connect <spec-or-directory>` | Generate or resume a server, verify it, and configure Cursor. Supports `--dry-run`, `--project-dir`, `--name`, `--yes`, and `--skip-install`. |
+| `mcpforge doctor` | Read-only project inspection; `--verify` explicitly installs/builds/launches and checks a local mock API. `--json` emits stable checks and exit codes without credential values. |
+| `mcpforge disconnect --name <name>` | Remove only an unchanged managed client entry, preserving generated files and credentials. Supports the same client/scope/config options as `connect`. |
 | `mcpforge add <slug>[@version] [output-dir]` | Install a server from the registry. Supports `--optimize`, `--workflows`, and `--pick`. |
 | `mcpforge auth login` | Save a GitHub token for registry publishing. |
 | `mcpforge auth logout` | Remove stored GitHub credentials. |
@@ -123,7 +136,7 @@ mcpforge publish --slug my-api --tags payments,billing
 
 ## Connect to Cursor
 
-Run `connect` from the project where you want to use the tools. It previews the new client entry before asking to proceed. Other server entries and top-level settings are preserved; a conflicting server name requires a different `--name`. An existing configuration is backed up before replacement. Configuration files must contain valid JSON; comments and trailing commas are rejected without modifying the file.
+Run `connect` from the project where you want to use the tools. It previews the new client entry before asking to proceed. Other server entries, comments, and top-level settings are preserved; a conflicting server name requires a different `--name`. An existing configuration is backed up before replacement. Valid JSON and JSONC with comments/trailing commas are supported; malformed configuration is rejected without modification.
 
 ```bash
 # Preview without generating, installing, building, or changing client settings

@@ -3,7 +3,11 @@ import { z } from "zod";
 
 import type { EndpointToolDefinition, MCPForgeIR } from "../parser/types.js";
 import { isEndpointTool } from "../parser/types.js";
-import type { OptimizationOptions, OptimizationResult, OptimizerMode } from "./types.js";
+import type {
+  OptimizationOptions,
+  OptimizationResult,
+  OptimizerMode,
+} from "./types.js";
 
 const ToolPrioritySchema = z.enum(["high", "medium", "low"]);
 
@@ -52,16 +56,18 @@ const AuthConfigSchema = z.object({
   tokenUrl: z.string().optional(),
   refreshUrl: z.string().optional(),
   scopes: z.array(z.string()).optional(),
-  oauthFlows: z.array(
-    z.object({
-      type: z.string(),
-      authorizationUrl: z.string().optional(),
-      tokenUrl: z.string().optional(),
-      refreshUrl: z.string().optional(),
-      scopes: z.array(z.string()),
-      supported: z.boolean(),
-    }),
-  ).optional(),
+  oauthFlows: z
+    .array(
+      z.object({
+        type: z.string(),
+        authorizationUrl: z.string().optional(),
+        tokenUrl: z.string().optional(),
+        refreshUrl: z.string().optional(),
+        scopes: z.array(z.string()),
+        supported: z.boolean(),
+      }),
+    )
+    .optional(),
 });
 
 const MCPForgeIRSchema = z.object({
@@ -89,7 +95,11 @@ function extractJsonPayload(responseText: string): string {
   return responseText.trim();
 }
 
-function buildOptimizationPrompt(ir: MCPForgeIR, mode: OptimizerMode, maxTools: number): string {
+function buildOptimizationPrompt(
+  ir: MCPForgeIR,
+  mode: OptimizerMode,
+  maxTools: number,
+): string {
   const strictModeInstructions =
     mode === "strict"
       ? [
@@ -116,7 +126,7 @@ function buildOptimizationPrompt(ir: MCPForgeIR, mode: OptimizerMode, maxTools: 
     "Critical rules:",
     "- Preserve the exact IR JSON schema format and field names.",
     "- Return ONLY valid JSON. No markdown. No code fences. No commentary.",
-    '- A tool with 20+ parameters is useless for an LLM. Break it down or simplify.',
+    "- A tool with 20+ parameters is useless for an LLM. Break it down or simplify.",
     "- Write descriptions as if briefing a competent assistant.",
     "- Description style: start with a verb, be specific, mention what the tool returns.",
     "- Remove health check endpoints, OpenAPI spec endpoints, and admin/internal routes users do not need.",
@@ -230,7 +240,10 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function scoreToolByPreferredTags(tool: EndpointToolDefinition, preferredTags: string[]): number {
+function scoreToolByPreferredTags(
+  tool: EndpointToolDefinition,
+  preferredTags: string[],
+): number {
   const toolTags = tool.tags.map((tag) => normalizeText(tag));
   const name = normalizeText(tool.name);
   const path = normalizeText(tool.path);
@@ -256,20 +269,26 @@ function selectToolsForOptimization(
   options: OptimizationOptions,
   logger: (message: string) => void,
 ): EndpointToolDefinition[] {
-  const endpointTools = ir.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
+  const endpointTools = ir.tools.filter(
+    (tool): tool is EndpointToolDefinition => isEndpointTool(tool),
+  );
   const mode = resolveMode(options);
   const maxEndpointsForOptimization =
     options.maxEndpointsForOptimization ??
     (mode === "strict"
       ? DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STRICT
       : DEFAULT_MAX_ENDPOINTS_FOR_OPTIMIZATION_STANDARD);
-  if (maxEndpointsForOptimization <= 0 || endpointTools.length <= maxEndpointsForOptimization) {
+  if (
+    maxEndpointsForOptimization <= 0 ||
+    endpointTools.length <= maxEndpointsForOptimization
+  ) {
     return endpointTools;
   }
 
-  const preferredTags = (options.preferredTagsForOptimization ?? DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS).map((tag) =>
-    normalizeText(tag),
-  );
+  const preferredTags = (
+    options.preferredTagsForOptimization ??
+    DEFAULT_PREFERRED_TAGS_FOR_LARGE_APIS
+  ).map((tag) => normalizeText(tag));
   const scored = endpointTools.map((tool, index) => ({
     tool,
     index,
@@ -282,7 +301,9 @@ function selectToolsForOptimization(
   if (hasMeaningfulScores) {
     selected = scored
       .slice()
-      .sort((left, right) => right.score - left.score || left.index - right.index)
+      .sort(
+        (left, right) => right.score - left.score || left.index - right.index,
+      )
       .slice(0, maxEndpointsForOptimization)
       .map((entry) => entry.tool);
     logger(
@@ -299,7 +320,10 @@ function selectToolsForOptimization(
 }
 
 function isContextLimitError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
   return (
     message.includes("prompt is too long") ||
     message.includes("too many tokens") ||
@@ -313,7 +337,10 @@ function isRecoverableChunkError(error: unknown): boolean {
   if (isContextLimitError(error)) {
     return true;
   }
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
   return (
     message.includes("failed to parse optimizer json response") ||
     message.includes("unterminated string") ||
@@ -322,7 +349,10 @@ function isRecoverableChunkError(error: unknown): boolean {
 }
 
 function isRateLimitError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
   return message.includes("rate limit");
 }
 
@@ -330,8 +360,12 @@ function resolveMode(options: OptimizationOptions): OptimizerMode {
   return options.mode ?? DEFAULT_OPTIMIZER_MODE;
 }
 
-function resolveMaxTools(options: OptimizationOptions, mode: OptimizerMode): number {
-  const fallback = mode === "strict" ? DEFAULT_MAX_TOOLS_STRICT : DEFAULT_MAX_TOOLS_STANDARD;
+function resolveMaxTools(
+  options: OptimizationOptions,
+  mode: OptimizerMode,
+): number {
+  const fallback =
+    mode === "strict" ? DEFAULT_MAX_TOOLS_STRICT : DEFAULT_MAX_TOOLS_STANDARD;
   const candidate = options.maxTools;
   if (typeof candidate !== "number" || !Number.isFinite(candidate)) {
     return fallback;
@@ -373,7 +407,10 @@ function methodScore(method: string): number {
   return 4;
 }
 
-function capTools(tools: EndpointToolDefinition[], maxTools: number): EndpointToolDefinition[] {
+function capTools(
+  tools: EndpointToolDefinition[],
+  maxTools: number,
+): EndpointToolDefinition[] {
   if (tools.length <= maxTools) {
     return tools;
   }
@@ -381,11 +418,13 @@ function capTools(tools: EndpointToolDefinition[], maxTools: number): EndpointTo
   return tools
     .map((tool, index) => ({ tool, index }))
     .sort((left, right) => {
-      const priorityDelta = toolPriorityScore(left.tool) - toolPriorityScore(right.tool);
+      const priorityDelta =
+        toolPriorityScore(left.tool) - toolPriorityScore(right.tool);
       if (priorityDelta !== 0) {
         return priorityDelta;
       }
-      const methodDelta = methodScore(left.tool.method) - methodScore(right.tool.method);
+      const methodDelta =
+        methodScore(left.tool.method) - methodScore(right.tool.method);
       if (methodDelta !== 0) {
         return methodDelta;
       }
@@ -410,9 +449,9 @@ async function optimizeSingleIR(
         ? ""
         : "\n\nYour previous response was not valid JSON. Return only valid JSON matching the schema exactly.";
     const response = await client.messages.create({
-      model: options.model ?? "claude-sonnet-4-20250514",
+      model:
+        options.model ?? process.env.MCPFORGE_AI_MODEL ?? "claude-sonnet-5-5",
       max_tokens: options.maxTokens ?? DEFAULT_OPTIMIZER_MAX_TOKENS,
-      temperature: options.temperature ?? 0.3,
       system:
         "You are an expert API designer who specializes in LLM tool interfaces. Your outputs must be concise, practical, and strictly valid JSON when requested.",
       messages: [
@@ -448,9 +487,12 @@ async function optimizeSingleIR(
     }
 
     const validated = MCPForgeIRSchema.parse(parsedJson);
-    validated.auth.required = validated.auth.required ?? ir.auth.required ?? false;
+    validated.auth.required =
+      validated.auth.required ?? ir.auth.required ?? false;
     validated.auth.hasSecuritySchemes =
-      validated.auth.hasSecuritySchemes ?? ir.auth.hasSecuritySchemes ?? validated.auth.type !== "none";
+      validated.auth.hasSecuritySchemes ??
+      ir.auth.hasSecuritySchemes ??
+      validated.auth.type !== "none";
     if (validated.rawEndpointCount <= 0) {
       validated.rawEndpointCount = ir.rawEndpointCount;
     }
@@ -466,13 +508,18 @@ async function optimizeSingleIR(
       if (!sourceTool) {
         return [];
       }
-      return [{
-        ...sourceTool,
-        name: optimizedTool.name,
-        description: optimizedTool.description,
-        tags: optimizedTool.tags.length > 0 ? optimizedTool.tags : sourceTool.tags,
-        priority: optimizedTool.priority,
-      }];
+      return [
+        {
+          ...sourceTool,
+          name: optimizedTool.name,
+          description: optimizedTool.description,
+          tags:
+            optimizedTool.tags.length > 0
+              ? optimizedTool.tags
+              : sourceTool.tags,
+          priority: optimizedTool.priority,
+        },
+      ];
     });
     return {
       ...ir,
@@ -494,7 +541,9 @@ function splitIntoChunks<T>(items: T[], chunkSize: number): T[][] {
   return chunks;
 }
 
-function dedupeToolNames(tools: EndpointToolDefinition[]): EndpointToolDefinition[] {
+function dedupeToolNames(
+  tools: EndpointToolDefinition[],
+): EndpointToolDefinition[] {
   const counts = new Map<string, number>();
   return tools.map((tool) => {
     const seen = counts.get(tool.name) ?? 0;
@@ -524,14 +573,23 @@ async function optimizeChunkRecursively(
 
   try {
     const optimizedChunk = await optimizeSingleIR(client, chunkIR, options);
-    return optimizedChunk.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool));
+    return optimizedChunk.tools.filter((tool): tool is EndpointToolDefinition =>
+      isEndpointTool(tool),
+    );
   } catch (error) {
     if (isRateLimitError(error) && retryCount < 2) {
       logger(
         `[mcpforge] Rate limit hit while optimizing chunk size ${tools.length}. Waiting 65s before retry ${retryCount + 1}/2.`,
       );
       await new Promise((resolve) => setTimeout(resolve, 65000));
-      return optimizeChunkRecursively(client, baseIR, tools, options, logger, retryCount + 1);
+      return optimizeChunkRecursively(
+        client,
+        baseIR,
+        tools,
+        options,
+        logger,
+        retryCount + 1,
+      );
     }
 
     if (tools.length > 1 && isRecoverableChunkError(error)) {
@@ -571,7 +629,9 @@ export async function optimizeIRWithAI(
   const maxTools = resolveMaxTools(options, mode);
   const endpointIR: MCPForgeIR = {
     ...ir,
-    tools: ir.tools.filter((tool): tool is EndpointToolDefinition => isEndpointTool(tool)),
+    tools: ir.tools.filter((tool): tool is EndpointToolDefinition =>
+      isEndpointTool(tool),
+    ),
   };
 
   if (!apiKey) {
@@ -592,7 +652,9 @@ export async function optimizeIRWithAI(
 
   const optimizationChunkSize =
     options.optimizationChunkSize ??
-    (mode === "strict" ? DEFAULT_OPTIMIZATION_CHUNK_SIZE_STRICT : DEFAULT_OPTIMIZATION_CHUNK_SIZE_STANDARD);
+    (mode === "strict"
+      ? DEFAULT_OPTIMIZATION_CHUNK_SIZE_STRICT
+      : DEFAULT_OPTIMIZATION_CHUNK_SIZE_STANDARD);
   if (selectedTools.length <= optimizationChunkSize) {
     const optimizedIR = await optimizeSingleIR(client, scopedIR, options);
     const optimizedEndpointTools = optimizedIR.tools.filter(
@@ -618,8 +680,16 @@ export async function optimizeIRWithAI(
   const optimizedTools: EndpointToolDefinition[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const chunk = chunks[index] ?? [];
-    logger(`[mcpforge] Optimizing chunk ${index + 1}/${chunks.length} (${chunk.length} tools).`);
-    const chunkTools = await optimizeChunkRecursively(client, scopedIR, chunk, options, logger);
+    logger(
+      `[mcpforge] Optimizing chunk ${index + 1}/${chunks.length} (${chunk.length} tools).`,
+    );
+    const chunkTools = await optimizeChunkRecursively(
+      client,
+      scopedIR,
+      chunk,
+      options,
+      logger,
+    );
     optimizedTools.push(...chunkTools);
   }
 

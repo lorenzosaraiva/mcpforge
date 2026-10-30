@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
   platform: "node",
-  target: "node20",
+  target: "node22",
   clean: true,
   sourcemap: true,
   bundle: true,
@@ -12,6 +12,8 @@ export default defineConfig({
   dts: false,
   shims: true,
   external: [
+    "ajv",
+    "ajv-formats",
     "@mcpforge/core",
     "@anthropic-ai/sdk",
     "@apidevtools/swagger-parser",

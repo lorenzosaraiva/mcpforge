@@ -8,6 +8,7 @@ import type {
 } from "../parser/types.js";
 import {
   toJsonSchema,
+  rebaseJsonSchema,
   toSnakeCase,
   toStructuredOutputSchema,
   truncateText,
@@ -142,27 +143,25 @@ function toResourceKey(value: string): string {
 }
 
 function resolveResourceInfo(tool: EndpointToolDefinition): ResourceInfo {
-  const primaryTag = tool.tags[0]?.trim();
-  if (primaryTag) {
-    const tagKey = toResourceKey(primaryTag);
-    const singular = singularize(tagKey);
-    const plural = pluralize(singular);
-    return {
-      singular,
-      plural,
-      humanSingular: humanizeSnake(singular),
-      humanPlural: humanizeSnake(plural),
-    };
-  }
-
   const segments = getPathSegments(tool.path);
   const plainSegments = segments.filter(
     (segment) => !isParameterSegment(segment) && !isVersionSegment(segment),
   );
-  const lastSegment = plainSegments[plainSegments.length - 1] ?? "resource";
-  const previousSegment = plainSegments[plainSegments.length - 2] ?? lastSegment;
-  const trailingParameter = segments.length > 0 && isParameterSegment(segments[segments.length - 1] ?? "");
-  const customAction = !trailingParameter && plainSegments.length >= 2 ? previousSegment : lastSegment;
+  const lastSegment =
+    plainSegments[plainSegments.length - 1] ??
+    tool.tags[0]?.trim() ??
+    "resource";
+  const previousSegment =
+    plainSegments[plainSegments.length - 2] ?? lastSegment;
+  const trailingParameter =
+    segments.length > 0 &&
+    isParameterSegment(segments[segments.length - 1] ?? "");
+  // Tags commonly group unrelated nested resources (GitHub's "repos" includes
+  // commits, branches, and contributors). Preserve the actual path resource.
+  const customAction =
+    !trailingParameter && isCustomAction(tool) && plainSegments.length >= 2
+      ? previousSegment
+      : lastSegment;
   const resourceKey = toResourceKey(customAction || "resource");
   const singular = singularize(resourceKey || "resource");
   const plural = pluralize(singular);
@@ -177,14 +176,21 @@ function resolveResourceInfo(tool: EndpointToolDefinition): ResourceInfo {
 
 function hasTrailingPathParam(tool: EndpointToolDefinition): boolean {
   const segments = getPathSegments(tool.path);
-  return segments.length > 0 && isParameterSegment(segments[segments.length - 1] ?? "");
+  return (
+    segments.length > 0 &&
+    isParameterSegment(segments[segments.length - 1] ?? "")
+  );
 }
 
-function lastPlainPathSegment(tool: EndpointToolDefinition): string | undefined {
+function lastPlainPathSegment(
+  tool: EndpointToolDefinition,
+): string | undefined {
   const segments = getPathSegments(tool.path);
   return [...segments]
     .reverse()
-    .find((segment) => !isParameterSegment(segment) && !isVersionSegment(segment));
+    .find(
+      (segment) => !isParameterSegment(segment) && !isVersionSegment(segment),
+    );
 }
 
 function extractSemanticVerb(tool: EndpointToolDefinition): string | undefined {
@@ -194,11 +200,15 @@ function extractSemanticVerb(tool: EndpointToolDefinition): string | undefined {
   const pathVerb = toResourceKey(lastPlainPathSegment(tool) ?? "");
   const candidates = [pathVerb, operationIdTokens[0] ?? ""].filter(Boolean);
 
-  return candidates.find((candidate) => CUSTOM_ACTION_VERBS.includes(candidate));
+  return candidates.find((candidate) =>
+    CUSTOM_ACTION_VERBS.includes(candidate),
+  );
 }
 
 function looksNoisy(tool: EndpointToolDefinition): boolean {
-  const haystack = normalizeText(`${tool.name} ${tool.path} ${tool.description}`);
+  const haystack = normalizeText(
+    `${tool.name} ${tool.path} ${tool.description}`,
+  );
   return NOISE_HINTS.some((hint) => haystack.includes(hint));
 }
 
@@ -215,7 +225,10 @@ function isCreate(tool: EndpointToolDefinition): boolean {
 }
 
 function isUpdate(tool: EndpointToolDefinition): boolean {
-  return (tool.method === "PATCH" || tool.method === "PUT") && hasTrailingPathParam(tool);
+  return (
+    (tool.method === "PATCH" || tool.method === "PUT") &&
+    hasTrailingPathParam(tool)
+  );
 }
 
 function isDelete(tool: EndpointToolDefinition): boolean {
@@ -241,8 +254,10 @@ function sortParameters(parameters: ToolParameter[]): ToolParameter[] {
     }
     const leftScore = USEFUL_QUERY_PARAMS.indexOf(normalizeText(left.name));
     const rightScore = USEFUL_QUERY_PARAMS.indexOf(normalizeText(right.name));
-    const normalizedLeftScore = leftScore === -1 ? USEFUL_QUERY_PARAMS.length : leftScore;
-    const normalizedRightScore = rightScore === -1 ? USEFUL_QUERY_PARAMS.length : rightScore;
+    const normalizedLeftScore =
+      leftScore === -1 ? USEFUL_QUERY_PARAMS.length : leftScore;
+    const normalizedRightScore =
+      rightScore === -1 ? USEFUL_QUERY_PARAMS.length : rightScore;
     if (normalizedLeftScore !== normalizedRightScore) {
       return normalizedLeftScore - normalizedRightScore;
     }
@@ -252,13 +267,25 @@ function sortParameters(parameters: ToolParameter[]): ToolParameter[] {
 
 function normalizeType(type: string): string {
   const normalized = type.toLowerCase();
-  if (["string", "number", "integer", "boolean", "object", "array", "null"].includes(normalized)) {
+  if (
+    [
+      "string",
+      "number",
+      "integer",
+      "boolean",
+      "object",
+      "array",
+      "null",
+    ].includes(normalized)
+  ) {
     return normalized;
   }
   return "string";
 }
 
-function buildSchemaForParameters(parameters: ToolParameter[]): Record<string, unknown> {
+function buildSchemaForParameters(
+  parameters: ToolParameter[],
+): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   const required: string[] = [];
 
@@ -300,19 +327,30 @@ function buildWorkflowInputSchema(
   const parameters =
     mode === "find"
       ? [
-          ...tool.parameters.filter((parameter) => parameter.location === "path"),
-          ...sortParameters(tool.parameters.filter((parameter) => isUsefulQueryParam(parameter))).slice(0, 6),
+          ...tool.parameters.filter(
+            (parameter) => parameter.location === "path",
+          ),
+          ...sortParameters(
+            tool.parameters.filter((parameter) =>
+              isUsefulQueryParam(parameter),
+            ),
+          ).slice(0, 6),
         ]
       : tool.parameters;
 
   const baseSchema = buildSchemaForParameters(parameters);
   const properties = (baseSchema.properties ?? {}) as Record<string, unknown>;
   const required = Array.isArray(baseSchema.required)
-    ? baseSchema.required.filter((entry): entry is string => typeof entry === "string")
+    ? baseSchema.required.filter(
+        (entry): entry is string => typeof entry === "string",
+      )
     : [];
 
   if (tool.requestBody) {
-    properties.body = toJsonSchema(tool.requestBody.schema);
+    properties.body = rebaseJsonSchema(
+      toJsonSchema(tool.requestBody.schema),
+      "#/properties/body",
+    );
     if (tool.requestBody.required) {
       required.push("body");
     }
@@ -333,7 +371,9 @@ function buildArgsFromSchema(
   inputSchema: Record<string, unknown>,
 ): Record<string, { $fromInput: string }> {
   const properties =
-    inputSchema.properties && typeof inputSchema.properties === "object" && !Array.isArray(inputSchema.properties)
+    inputSchema.properties &&
+    typeof inputSchema.properties === "object" &&
+    !Array.isArray(inputSchema.properties)
       ? (inputSchema.properties as Record<string, unknown>)
       : {};
 
@@ -342,7 +382,16 @@ function buildArgsFromSchema(
   );
 }
 
-function workflowDescriptionFor(tool: EndpointToolDefinition, resource: ResourceInfo): string {
+function workflowDescriptionFor(
+  tool: EndpointToolDefinition,
+  resource: ResourceInfo,
+): string {
+  if (tool.description.trim()) {
+    return truncateText(
+      `${tool.description.trim()} Calls ${tool.method.toUpperCase()} ${tool.path} and returns the upstream result.`,
+      300,
+    );
+  }
   if (isCollectionGet(tool)) {
     return truncateText(
       `Find ${resource.humanPlural} using the most useful filters from the upstream API and return matching results.`,
@@ -385,7 +434,10 @@ function workflowDescriptionFor(tool: EndpointToolDefinition, resource: Resource
   );
 }
 
-function workflowNameFor(tool: EndpointToolDefinition, resource: ResourceInfo): string {
+function workflowNameFor(
+  tool: EndpointToolDefinition,
+  resource: ResourceInfo,
+): string {
   if (isCollectionGet(tool)) {
     return `find_${resource.plural}`;
   }
@@ -410,10 +462,17 @@ function workflowNameFor(tool: EndpointToolDefinition, resource: ResourceInfo): 
   return `${verb}_${resource.singular}`;
 }
 
-function scoreCandidate(tool: EndpointToolDefinition, preferredOperationIds: Set<string>): number {
+function scoreCandidate(
+  tool: EndpointToolDefinition,
+  preferredOperationIds: Set<string>,
+): number {
   let score = 0;
 
-  if (preferredOperationIds.has(normalizeText(tool.originalOperationId ?? tool.name))) {
+  if (
+    preferredOperationIds.has(
+      normalizeText(tool.originalOperationId ?? tool.name),
+    )
+  ) {
     score += 100;
   }
 
@@ -460,7 +519,10 @@ function toWorkflowCandidate(
   }
 
   const resource = resolveResourceInfo(tool);
-  const inputSchema = buildWorkflowInputSchema(tool, isCollectionGet(tool) ? "find" : "default");
+  const inputSchema = buildWorkflowInputSchema(
+    tool,
+    isCollectionGet(tool) ? "find" : "default",
+  );
   const args = buildArgsFromSchema(inputSchema);
   const stepId = `${workflowNameFor(tool, resource)}_step`;
   const step: WorkflowStepDefinition = {
@@ -489,12 +551,16 @@ function toWorkflowCandidate(
   };
 }
 
-function dedupeWorkflowCandidates(candidates: WorkflowCandidate[]): WorkflowCandidate[] {
+function dedupeWorkflowCandidates(
+  candidates: WorkflowCandidate[],
+): WorkflowCandidate[] {
   const seen = new Set<string>();
   const deduped: WorkflowCandidate[] = [];
 
   for (const candidate of candidates) {
-    const operationId = normalizeText(candidate.workflow.dependsOnOperationIds[0] ?? candidate.workflow.name);
+    const operationId = normalizeText(
+      candidate.workflow.dependsOnOperationIds[0] ?? candidate.workflow.name,
+    );
     const key = `${normalizeText(candidate.workflow.name)}::${operationId}`;
     if (seen.has(key)) {
       continue;
@@ -542,8 +608,14 @@ export function planWorkflowTools(
 ): MCPForgeIR {
   const logger = options.logger ?? defaultLogger;
   const maxTools = Math.max(1, Math.floor(options.maxTools ?? 12));
-  const maxWorkflows = Math.max(1, Math.floor(options.maxWorkflows ?? Math.min(maxTools, 12)));
-  const minWorkflowCount = Math.max(1, Math.floor(options.minWorkflowCount ?? Math.min(5, maxTools)));
+  const maxWorkflows = Math.max(
+    1,
+    Math.floor(options.maxWorkflows ?? Math.min(maxTools, 12)),
+  );
+  const minWorkflowCount = Math.max(
+    1,
+    Math.floor(options.minWorkflowCount ?? Math.min(5, maxTools)),
+  );
   const includeEndpointFallback = options.includeEndpointFallback ?? true;
   const preferredOperationIds = new Set(
     (options.preferredOperationIds ?? []).map((value) => normalizeText(value)),
@@ -556,22 +628,37 @@ export function planWorkflowTools(
   const workflowCandidates = dedupeWorkflowCandidates(
     endpointTools
       .map((tool) => toWorkflowCandidate(tool, preferredOperationIds))
-      .filter((candidate): candidate is WorkflowCandidate => Boolean(candidate)),
+      .filter((candidate): candidate is WorkflowCandidate =>
+        Boolean(candidate),
+      ),
   )
-    .sort((left, right) => right.score - left.score || left.workflow.name.localeCompare(right.workflow.name))
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.workflow.name.localeCompare(right.workflow.name),
+    )
     .slice(0, maxWorkflows);
 
-  const selectedTools: ToolDefinition[] = workflowCandidates.map((candidate) => candidate.workflow);
+  const selectedTools: ToolDefinition[] = workflowCandidates.map(
+    (candidate) => candidate.workflow,
+  );
   const usedOperationIds = new Set(
     selectedTools
-      .filter((tool): tool is WorkflowToolDefinition => tool.kind === "workflow")
+      .filter(
+        (tool): tool is WorkflowToolDefinition => tool.kind === "workflow",
+      )
       .flatMap((tool) => tool.dependsOnOperationIds)
       .map((value) => normalizeText(value)),
   );
 
   if (includeEndpointFallback && selectedTools.length < maxTools) {
-    for (const endpointTool of sortEndpointsForFallback(endpointTools, preferredOperationIds)) {
-      const operationId = normalizeText(endpointTool.originalOperationId ?? endpointTool.name);
+    for (const endpointTool of sortEndpointsForFallback(
+      endpointTools,
+      preferredOperationIds,
+    )) {
+      const operationId = normalizeText(
+        endpointTool.originalOperationId ?? endpointTool.name,
+      );
       if (usedOperationIds.has(operationId)) {
         continue;
       }
@@ -579,7 +666,10 @@ export function planWorkflowTools(
       if (selectedTools.length >= maxTools) {
         break;
       }
-      if (workflowCandidates.length >= minWorkflowCount && selectedTools.length >= workflowCandidates.length + 3) {
+      if (
+        workflowCandidates.length >= minWorkflowCount &&
+        selectedTools.length >= workflowCandidates.length + 3
+      ) {
         break;
       }
     }

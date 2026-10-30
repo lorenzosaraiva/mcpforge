@@ -1,4 +1,5 @@
 export interface MCPForgeIR {
+  executionPolicy?: { readOnly: boolean };
   irVersion?: number;
   apiName: string;
   apiDescription: string;
@@ -120,7 +121,10 @@ export interface ToolParameter {
 
 export interface RequestBodyDef {
   contentType: string;
-  contentTypes?: Array<{ contentType: string; schema: Record<string, unknown> }>;
+  contentTypes?: Array<{
+    contentType: string;
+    schema: Record<string, unknown>;
+  }>;
   schema: Record<string, unknown>;
   required: boolean;
   description?: string;
@@ -129,15 +133,22 @@ export interface RequestBodyDef {
 export interface ResponseDef {
   statusCode: string;
   contentType: string;
-  contentTypes?: Array<{ contentType: string; schema: Record<string, unknown> }>;
+  contentTypes?: Array<{
+    contentType: string;
+    schema: Record<string, unknown>;
+  }>;
   schema: Record<string, unknown>;
   description?: string;
 }
 
-export function isEndpointTool(tool: ToolDefinition): tool is EndpointToolDefinition {
+export function isEndpointTool(
+  tool: ToolDefinition,
+): tool is EndpointToolDefinition {
   return tool.kind === "endpoint";
 }
 
-export function isWorkflowTool(tool: ToolDefinition): tool is WorkflowToolDefinition {
+export function isWorkflowTool(
+  tool: ToolDefinition,
+): tool is WorkflowToolDefinition {
   return tool.kind === "workflow";
 }

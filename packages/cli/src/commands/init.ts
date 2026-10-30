@@ -1,6 +1,7 @@
 import { basename, join, relative, resolve } from "node:path";
 
 import {
+  applyReadOnlyPolicy,
   type MCPForgeIR,
   type OptimizerMode,
   generateTypeScriptMCPServer,
@@ -16,10 +17,12 @@ import type { Command } from "commander";
 import { type MCPForgeConfig, writeConfigFile } from "../utils/config.js";
 import { promptConfirm, promptText } from "../utils/prompts.js";
 import { isNonInteractiveRuntime } from "../utils/runtime.js";
-import { buildCandidateIR, buildFinalIR, getDefaultSelectedTools } from "../utils/planning.js";
 import {
-  getAllToolSelectionValues,
-} from "../utils/tool-selection.js";
+  buildCandidateIR,
+  buildFinalIR,
+  getDefaultSelectedTools,
+} from "../utils/planning.js";
+import { getAllToolSelectionValues } from "../utils/tool-selection.js";
 import { pickToolsFromIR } from "../utils/tool-picker.js";
 
 const DEFAULT_STRICT_MAX_TOOLS = 25;
@@ -43,22 +46,25 @@ function resolveMaxTools(
   mode: OptimizerMode,
 ): number {
   if (rawValue === undefined) {
-    return mode === "strict" ? DEFAULT_STRICT_MAX_TOOLS : DEFAULT_STANDARD_MAX_TOOLS;
+    return mode === "strict"
+      ? DEFAULT_STRICT_MAX_TOOLS
+      : DEFAULT_STANDARD_MAX_TOOLS;
   }
 
   const numeric = Number(rawValue);
   if (!Number.isFinite(numeric) || numeric <= 0) {
-    throw new Error(`--max-tools must be a positive number. Received: ${rawValue}`);
+    throw new Error(
+      `--max-tools must be a positive number. Received: ${rawValue}`,
+    );
   }
   return Math.floor(numeric);
 }
 
 function summarizeTools(ir: MCPForgeIR): string {
-  const lines = ir.tools.map(
-    (tool, index) =>
-      tool.kind === "endpoint"
-        ? `${index + 1}. ${tool.name}\n   ${tool.method} ${tool.path}\n   ${tool.description}`
-        : `${index + 1}. ${tool.name}\n   WORKFLOW (${tool.dependsOnOperationIds.length} step dependency)\n   ${tool.description}`,
+  const lines = ir.tools.map((tool, index) =>
+    tool.kind === "endpoint"
+      ? `${index + 1}. ${tool.name}\n   ${tool.method} ${tool.path}\n   ${tool.description}`
+      : `${index + 1}. ${tool.name}\n   WORKFLOW (${tool.dependsOnOperationIds.length} step dependency)\n   ${tool.description}`,
   );
   return lines.join("\n");
 }
@@ -85,18 +91,42 @@ export function registerInitCommand(program: Command): void {
   program
     .command("init")
     .argument("<spec>", "OpenAPI spec URL/path, or docs URL with --from-url")
-    .description("Parse an OpenAPI spec (or infer from docs URL) and generate a complete MCP server project")
-    .option("--from-url", "Treat <spec> as an API documentation URL and infer endpoints with AI")
+    .description(
+      "Parse an OpenAPI spec (or infer from docs URL) and generate a complete MCP server project",
+    )
+    .option(
+      "--from-url",
+      "Treat <spec> as an API documentation URL and infer endpoints with AI",
+    )
     .option("--optimize", "Enable AI optimization")
     .option("--no-optimize", "Disable AI optimization")
     .option("--strict", "Use strict optimization mode (aggressive curation)")
-    .option("--standard", "Use standard optimization mode (broader tool coverage)")
-    .option("--max-tools <number>", "Set max tools target for optimization mode")
+    .option(
+      "--standard",
+      "Use standard optimization mode (broader tool coverage)",
+    )
+    .option(
+      "--max-tools <number>",
+      "Set max tools target for optimization mode",
+    )
     .option("--pick", "Interactively select which endpoints become tools")
-    .option("--workflows", "Generate task-oriented workflow tools instead of only raw endpoint tools")
-    .option("--raw-endpoints", "Disable workflow planning and keep endpoint tools only")
+    .option(
+      "--workflows",
+      "Generate task-oriented workflow tools instead of only raw endpoint tools",
+    )
+    .option(
+      "--raw-endpoints",
+      "Disable workflow planning and keep endpoint tools only",
+    )
+    .option(
+      "--read-only",
+      "Expose and enforce only GET, HEAD, and OPTIONS operations",
+    )
     .option("-o, --output <dir>", "Output directory for generated project")
-    .option("--dry-run", "Parse and optimize, then print tool summary without writing files")
+    .option(
+      "--dry-run",
+      "Parse and optimize, then print tool summary without writing files",
+    )
     .action(
       async (
         spec: string,
@@ -111,221 +141,247 @@ export function registerInitCommand(program: Command): void {
           pick?: boolean;
           workflows?: boolean;
           rawEndpoints?: boolean;
+          readOnly?: boolean;
         },
       ) => {
-      intro("mcpforge init");
+        intro("mcpforge init");
 
-      const optimizerMode = resolveOptimizationMode(options);
-      const maxTools = resolveMaxTools(options.maxTools, optimizerMode);
+        const optimizerMode = resolveOptimizationMode(options);
+        const maxTools = resolveMaxTools(options.maxTools, optimizerMode);
 
-      let parsedIR: MCPForgeIR;
-      let sourceType: MCPForgeConfig["sourceType"] = "openapi";
-      let scrapedDocs: ScrapedDocPage[] | undefined;
+        let parsedIR: MCPForgeIR;
+        let sourceType: MCPForgeConfig["sourceType"] = "openapi";
+        let scrapedDocs: ScrapedDocPage[] | undefined;
 
-      if (options.fromUrl) {
-        sourceType = "docs-url";
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (!apiKey) {
-          throw new Error("--from-url requires ANTHROPIC_API_KEY to infer API structure from documentation.");
+        if (options.fromUrl) {
+          sourceType = "docs-url";
+          const apiKey = process.env.ANTHROPIC_API_KEY;
+          if (!apiKey) {
+            throw new Error(
+              "--from-url requires ANTHROPIC_API_KEY to infer API structure from documentation.",
+            );
+          }
+
+          const scrapeSpinner = spinner();
+          scrapeSpinner.start(`Scraping API documentation from ${spec}...`);
+          scrapedDocs = await scrapeDocsFromUrl(spec, {
+            logger: (message) => log.warn(message),
+            maxPages: 20,
+            timeoutMs: 10_000,
+          });
+          scrapeSpinner.stop("Documentation pages scraped.");
+
+          note(
+            [
+              `Found ${scrapedDocs.length} documentation page(s).`,
+              "Analyzing documentation with AI to infer API structure...",
+            ].join("\n"),
+            "Docs Extraction",
+          );
+
+          const inferSpinner = spinner();
+          inferSpinner.start("Analyzing docs with Claude...");
+          parsedIR = await inferIRFromDocs(scrapedDocs, {
+            apiKey,
+            logger: (message) => log.warn(message),
+          });
+          inferSpinner.stop("AI analysis completed.");
+
+          log.info(
+            `Identified ${parsedIR.tools.length} endpoint(s). API: ${parsedIR.apiName}. Auth: ${parsedIR.auth.type}.`,
+          );
+        } else {
+          const parseSpinner = spinner();
+          parseSpinner.start("Parsing OpenAPI spec...");
+          parsedIR = await parseOpenAPISpec(spec);
+          parseSpinner.stop("OpenAPI parsed successfully.");
         }
-
-        const scrapeSpinner = spinner();
-        scrapeSpinner.start(`Scraping API documentation from ${spec}...`);
-        scrapedDocs = await scrapeDocsFromUrl(spec, {
-          logger: (message) => log.warn(message),
-          maxPages: 20,
-          timeoutMs: 10_000,
-        });
-        scrapeSpinner.stop("Documentation pages scraped.");
 
         note(
           [
-            `Found ${scrapedDocs.length} documentation page(s).`,
-            "Analyzing documentation with AI to infer API structure...",
+            `API: ${parsedIR.apiName}`,
+            `Endpoints found: ${parsedIR.rawEndpointCount}`,
+            `Auth detected: ${parsedIR.auth.type}`,
+            `Base URL: ${parsedIR.baseUrl}`,
           ].join("\n"),
-          "Docs Extraction",
+          "Spec Summary",
         );
 
-        const inferSpinner = spinner();
-        inferSpinner.start("Analyzing docs with Claude...");
-        parsedIR = await inferIRFromDocs(scrapedDocs, {
-          apiKey,
-          logger: (message) => log.warn(message),
-        });
-        inferSpinner.stop("AI analysis completed.");
-
-        log.info(
-          `Identified ${parsedIR.tools.length} endpoint(s). API: ${parsedIR.apiName}. Auth: ${parsedIR.auth.type}.`,
-        );
-      } else {
-        const parseSpinner = spinner();
-        parseSpinner.start("Parsing OpenAPI spec...");
-        parsedIR = await parseOpenAPISpec(spec);
-        parseSpinner.stop("OpenAPI parsed successfully.");
-      }
-
-      note(
-        [
-          `API: ${parsedIR.apiName}`,
-          `Endpoints found: ${parsedIR.rawEndpointCount}`,
-          `Auth detected: ${parsedIR.auth.type}`,
-          `Base URL: ${parsedIR.baseUrl}`,
-        ].join("\n"),
-        "Spec Summary",
-      );
-
-      const wantsOptimization =
-        options.optimize ??
-        (isNonInteractiveRuntime()
-          ? false
-          : await promptConfirm("Would you like AI to optimize the tools for LLM usage?", true));
-
-      let optimizedIR: MCPForgeIR | undefined;
-      let optimized = false;
-
-      if (wantsOptimization) {
-        const optimizeSpinner = spinner();
-        optimizeSpinner.start(
-          `Optimizing in ${optimizerMode} mode (target: \u2264${maxTools} tools)...`,
-        );
-        const result = await optimizeIRWithAI(parsedIR, {
-          mode: optimizerMode,
-          maxTools,
-          logger: (message) => log.warn(message),
-        });
-
-        if (result.skipped) {
-          optimizeSpinner.stop("Optimization skipped.");
-          log.warn(result.reason ?? "Optimization skipped.");
-        } else {
-          optimizeSpinner.stop("Optimization completed.");
-          optimizedIR = result.optimizedIR;
-          optimized = true;
-          log.info(
-            `Tool count changed: ${parsedIR.tools.length} endpoints -> ${optimizedIR.tools.length} AI-suggested tools`,
-          );
-        }
-      }
-
-      if (options.workflows && options.rawEndpoints) {
-        throw new Error("Use either --workflows or --raw-endpoints, not both.");
-      }
-
-      const workflowEnabled =
-        options.workflows ??
-        (options.rawEndpoints
-          ? false
-          : isNonInteractiveRuntime()
+        const wantsOptimization =
+          options.optimize ??
+          (isNonInteractiveRuntime()
             ? false
-            : await promptConfirm("Generate task-oriented workflow tools?", true));
+            : await promptConfirm(
+                "Would you like AI to optimize the tools for LLM usage?",
+                true,
+              ));
 
-      const candidateIR = buildCandidateIR({
-        sourceIR: parsedIR,
-        optimizedIR,
-        workflowEnabled,
-        maxTools,
-      });
+        let optimizedIR: MCPForgeIR | undefined;
+        let optimized = false;
 
-      const defaultSelectedTools = workflowEnabled
-        ? getAllToolSelectionValues(candidateIR)
-        : getDefaultSelectedTools({
-            sourceIR: parsedIR,
-            optimizedIR,
+        if (wantsOptimization) {
+          const optimizeSpinner = spinner();
+          optimizeSpinner.start(
+            `Optimizing in ${optimizerMode} mode (target: \u2264${maxTools} tools)...`,
+          );
+          const result = await optimizeIRWithAI(parsedIR, {
+            mode: optimizerMode,
+            maxTools,
+            logger: (message) => log.warn(message),
           });
-      let selectedTools = defaultSelectedTools;
 
-      if (options.pick) {
-        if (isNonInteractiveRuntime()) {
-          log.warn("Non-interactive mode detected. Ignoring --pick.");
-        } else {
-          const pickResult = await pickToolsFromIR(candidateIR, {
-            defaultSelectedTools,
-            message: workflowEnabled
-              ? "Select workflow and fallback tools to generate"
-              : "Select endpoints to generate as tools",
-          });
-          selectedTools = pickResult.selectedTools;
-          log.info(
-            `Selected ${selectedTools.length} tool(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+          if (result.skipped) {
+            optimizeSpinner.stop("Optimization skipped.");
+            log.warn(result.reason ?? "Optimization skipped.");
+          } else {
+            optimizeSpinner.stop("Optimization completed.");
+            optimizedIR = result.optimizedIR;
+            optimized = true;
+            log.info(
+              `Tool count changed: ${parsedIR.tools.length} endpoints -> ${optimizedIR.tools.length} AI-suggested tools`,
+            );
+          }
+        }
+
+        if (options.workflows && options.rawEndpoints) {
+          throw new Error(
+            "Use either --workflows or --raw-endpoints, not both.",
           );
         }
-      }
 
-      const finalIR = buildFinalIR({
-        sourceIR: parsedIR,
-        optimizedIR,
-        workflowEnabled,
-        maxTools,
-        selectedTools,
-      });
-      const workflowCount = finalIR.tools.filter((tool) => tool.kind === "workflow").length;
+        const workflowEnabled =
+          options.workflows ??
+          (options.rawEndpoints
+            ? false
+            : isNonInteractiveRuntime()
+              ? false
+              : await promptConfirm(
+                  "Generate task-oriented workflow tools?",
+                  true,
+                ));
 
-      if (options.dryRun) {
-        note(
-          [
-            `Source type: ${sourceType}`,
-            `Raw endpoints: ${parsedIR.rawEndpointCount}`,
-            `Selected tools: ${finalIR.tools.length}`,
-            `Workflow tools: ${workflowCount}`,
-            `Picker enabled: ${options.pick ? "yes" : "no"}`,
-            `Optimizer mode: ${optimizerMode} (\u2264${maxTools})`,
-            `Optimization applied: ${optimized ? "yes" : "no"}`,
-            `Workflow planning: ${workflowEnabled ? "yes" : "no"}`,
-            ...(scrapedDocs ? [`Docs pages analyzed: ${scrapedDocs.length}`] : []),
-            "",
-            summarizeTools(finalIR),
-          ].join("\n"),
-          "Dry Run Preview",
+        const candidateIR = buildCandidateIR({
+          sourceIR: parsedIR,
+          optimizedIR,
+          workflowEnabled,
+          maxTools,
+        });
+
+        const defaultSelectedTools = workflowEnabled
+          ? getAllToolSelectionValues(candidateIR)
+          : getDefaultSelectedTools({
+              sourceIR: parsedIR,
+              optimizedIR,
+            });
+        let selectedTools = defaultSelectedTools;
+
+        if (options.pick) {
+          if (isNonInteractiveRuntime()) {
+            log.warn("Non-interactive mode detected. Ignoring --pick.");
+          } else {
+            const pickResult = await pickToolsFromIR(candidateIR, {
+              defaultSelectedTools,
+              message: workflowEnabled
+                ? "Select workflow and fallback tools to generate"
+                : "Select endpoints to generate as tools",
+            });
+            selectedTools = pickResult.selectedTools;
+            log.info(
+              `Selected ${selectedTools.length} tool(s)${pickResult.mode === "tag" ? " by tag" : ""}.`,
+            );
+          }
+        }
+
+        let finalIR = buildFinalIR({
+          sourceIR: parsedIR,
+          optimizedIR,
+          workflowEnabled,
+          maxTools,
+          selectedTools,
+        });
+        if (options.readOnly) finalIR = applyReadOnlyPolicy(finalIR, parsedIR);
+        selectedTools = getAllToolSelectionValues(finalIR);
+        const workflowCount = finalIR.tools.filter(
+          (tool) => tool.kind === "workflow",
+        ).length;
+
+        if (options.dryRun) {
+          note(
+            [
+              `Source type: ${sourceType}`,
+              `Raw endpoints: ${parsedIR.rawEndpointCount}`,
+              `Selected tools: ${finalIR.tools.length}`,
+              `Workflow tools: ${workflowCount}`,
+              `Picker enabled: ${options.pick ? "yes" : "no"}`,
+              `Optimizer mode: ${optimizerMode} (\u2264${maxTools})`,
+              `Optimization applied: ${optimized ? "yes" : "no"}`,
+              `Workflow planning: ${workflowEnabled ? "yes" : "no"}`,
+              ...(scrapedDocs
+                ? [`Docs pages analyzed: ${scrapedDocs.length}`]
+                : []),
+              "",
+              summarizeTools(finalIR),
+            ].join("\n"),
+            "Dry Run Preview",
+          );
+          outro("Dry run complete. No files were written.");
+          return;
+        }
+
+        const defaultOutputDir = `./mcp-server-${toKebabCase(parsedIR.apiName)}`;
+        const outputDirInput =
+          options.output ??
+          (await promptText("Output directory", defaultOutputDir));
+        const outputDir = outputDirInput || defaultOutputDir;
+        const resolvedOutputDir = resolve(process.cwd(), outputDir);
+
+        const generateSpinner = spinner();
+        generateSpinner.start(`Generating MCP server in ${outputDir}...`);
+        await generateTypeScriptMCPServer(finalIR, {
+          outputDir: resolvedOutputDir,
+          projectName: basename(resolvedOutputDir),
+          sourceIR: parsedIR,
+        });
+
+        const config: MCPForgeConfig = {
+          specSource:
+            options.fromUrl || isHttpUrl(spec)
+              ? spec
+              : resolve(process.cwd(), spec),
+          sourceType,
+          apiName: toKebabCase(finalIR.apiName),
+          outputDir,
+          optimized,
+          workflowEnabled,
+          optimizerMode,
+          maxTools,
+          selectedTools,
+          ir: finalIR,
+          sourceIR: parsedIR,
+          ...(optimizedIR ? { optimizedIR } : {}),
+          ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
+          ...(scrapedDocs ? { scrapedDocs } : {}),
+        };
+
+        await writeConfigFile(
+          join(resolvedOutputDir, "mcpforge.config.json"),
+          config,
         );
-        outro("Dry run complete. No files were written.");
-        return;
-      }
+        generateSpinner.stop("Project generated.");
 
-      const defaultOutputDir = `./mcp-server-${toKebabCase(parsedIR.apiName)}`;
-      const outputDirInput = options.output ?? (await promptText("Output directory", defaultOutputDir));
-      const outputDir = outputDirInput || defaultOutputDir;
-      const resolvedOutputDir = resolve(process.cwd(), outputDir);
-
-      const generateSpinner = spinner();
-      generateSpinner.start(`Generating MCP server in ${outputDir}...`);
-      await generateTypeScriptMCPServer(finalIR, {
-        outputDir: resolvedOutputDir,
-        projectName: basename(resolvedOutputDir),
-        sourceIR: parsedIR,
-      });
-
-      const config: MCPForgeConfig = {
-        specSource: options.fromUrl || isHttpUrl(spec) ? spec : resolve(process.cwd(), spec),
-        sourceType,
-        apiName: toKebabCase(finalIR.apiName),
-        outputDir,
-        optimized,
-        workflowEnabled,
-        optimizerMode,
-        maxTools,
-        selectedTools,
-        ir: finalIR,
-        sourceIR: parsedIR,
-        ...(optimizedIR ? { optimizedIR } : {}),
-        ...(workflowEnabled ? { workflowIR: candidateIR } : {}),
-        ...(scrapedDocs ? { scrapedDocs } : {}),
-      };
-
-      await writeConfigFile(join(resolvedOutputDir, "mcpforge.config.json"), config);
-      generateSpinner.stop("Project generated.");
-
-      const displayDir = relative(process.cwd(), resolvedOutputDir) || ".";
-      outro(
-        [
-          `Done. Generated project at ${displayDir}`,
-          "",
-          "Next steps:",
-          `1) cd ${displayDir}`,
-          "2) npm install",
-          "3) Copy .env.example to .env and fill required values",
-          "4) npm run build",
-          "5) Add dist/index.js to Claude Desktop MCP config",
-        ].join("\n"),
-      );
-    });
+        const displayDir = relative(process.cwd(), resolvedOutputDir) || ".";
+        outro(
+          [
+            `Done. Generated project at ${displayDir}`,
+            "",
+            "Next steps:",
+            `1) cd ${displayDir}`,
+            "2) npm install",
+            "3) Copy .env.example to .env and fill required values",
+            "4) npm run build",
+            "5) Add dist/index.js to Claude Desktop MCP config",
+          ].join("\n"),
+        );
+      },
+    );
 }

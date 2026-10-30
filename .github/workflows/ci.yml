@@ -10,9 +10,10 @@ on:
 jobs:
   build-and-test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        node: [20, 22]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22.19.0, 24, 26]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -42,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -50,3 +51,11 @@ jobs:
       - run: npm run release:validate
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run test:package
+      - run: npm run benchmark:contracts
+      - name: Preserve deterministic task results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-contract-report
+          path: benchmarks/results/contract.json
+          if-no-files-found: ignore

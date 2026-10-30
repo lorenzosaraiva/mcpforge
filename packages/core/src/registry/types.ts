@@ -6,6 +6,8 @@ export interface RegistryVerificationSummary {
   verifiedAt: string;
   compatibilityVersion: string;
   finalIRHash?: string;
+  runtimeHash?: string;
+  generatorVersion?: string;
   toolCount?: number;
   passedToolCount?: number;
   skippedToolCount?: number;

@@ -5,6 +5,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   isWorkflowTool,
   toJsonSchema,
+  rebaseJsonSchema,
   toStructuredOutputSchema,
   truncateText,
   type ToolDefinition,
@@ -31,6 +32,8 @@ export interface InvocationTestOptions {
 }
 
 export interface SampleGenerationOptions {
+  rootSchema?: unknown;
+  depth?: number;
   includeOptionalObjectProperties?: boolean;
   requestBodyContentType?: string;
 }
@@ -41,16 +44,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeType(type: string): string {
   const normalized = type.toLowerCase();
-  if (["string", "number", "integer", "boolean", "object", "array", "null"].includes(normalized)) {
+  if (
+    [
+      "string",
+      "number",
+      "integer",
+      "boolean",
+      "object",
+      "array",
+      "null",
+    ].includes(normalized)
+  ) {
     return normalized;
   }
 
   return "string";
 }
 
-function buildExpectedInputSchema(tool: ToolDefinition): Record<string, unknown> {
+function buildExpectedInputSchema(
+  tool: ToolDefinition,
+): Record<string, unknown> {
   if (isWorkflowTool(tool)) {
-    return JSON.parse(JSON.stringify(tool.inputSchema)) as Record<string, unknown>;
+    return JSON.parse(JSON.stringify(tool.inputSchema)) as Record<
+      string,
+      unknown
+    >;
   }
 
   const properties: Record<string, unknown> = {};
@@ -76,7 +94,10 @@ function buildExpectedInputSchema(tool: ToolDefinition): Record<string, unknown>
   }
 
   if (tool.requestBody) {
-    properties.body = toJsonSchema(tool.requestBody.schema);
+    properties.body = rebaseJsonSchema(
+      toJsonSchema(tool.requestBody.schema),
+      "#/properties/body",
+    );
     if (tool.requestBody.required) {
       required.push("body");
     }
@@ -95,14 +116,18 @@ function buildExpectedInputSchema(tool: ToolDefinition): Record<string, unknown>
   return JSON.parse(JSON.stringify(schema)) as Record<string, unknown>;
 }
 
-function resolveSchemaType(schema: Record<string, unknown>): string | undefined {
+function resolveSchemaType(
+  schema: Record<string, unknown>,
+): string | undefined {
   const { type } = schema;
   if (typeof type === "string") {
     return type === "null" ? "null" : type;
   }
 
   if (Array.isArray(type)) {
-    const firstTypedValue = type.find((value): value is string => typeof value === "string" && value !== "null");
+    const firstTypedValue = type.find(
+      (value): value is string => typeof value === "string" && value !== "null",
+    );
     if (firstTypedValue) {
       return firstTypedValue;
     }
@@ -119,7 +144,10 @@ function resolveSchemaType(schema: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
-function sampleString(fieldName: string | undefined, format: string | undefined): string {
+function sampleString(
+  fieldName: string | undefined,
+  format: string | undefined,
+): string {
   const normalizedName = fieldName?.toLowerCase() ?? "";
   const normalizedFormat = format?.toLowerCase() ?? "";
 
@@ -127,7 +155,11 @@ function sampleString(fieldName: string | undefined, format: string | undefined)
     return "user@example.com";
   }
 
-  if (normalizedFormat === "uri" || normalizedFormat === "url" || normalizedName.includes("url")) {
+  if (
+    normalizedFormat === "uri" ||
+    normalizedFormat === "url" ||
+    normalizedName.includes("url")
+  ) {
     return "https://example.com";
   }
 
@@ -143,15 +175,26 @@ function sampleString(fieldName: string | undefined, format: string | undefined)
     return "00000000-0000-4000-8000-000000000000";
   }
 
-  if (normalizedName === "id" || normalizedName.endsWith("_id") || normalizedName.endsWith("-id")) {
+  if (
+    normalizedName === "id" ||
+    normalizedName.endsWith("_id") ||
+    normalizedName.endsWith("-id")
+  ) {
     return "1";
   }
 
   return "test";
 }
 
-function sampleBinaryValue(fieldName: string | undefined, options: SampleGenerationOptions): unknown {
-  if (options.requestBodyContentType?.toLowerCase().includes("multipart/form-data")) {
+function sampleBinaryValue(
+  fieldName: string | undefined,
+  options: SampleGenerationOptions,
+): unknown {
+  if (
+    options.requestBodyContentType
+      ?.toLowerCase()
+      .includes("multipart/form-data")
+  ) {
     return {
       content: "sample file content",
       filename: `${fieldName ?? "file"}.txt`,
@@ -170,8 +213,29 @@ export function sampleValueFromSchema(
   fieldName?: string,
   options: SampleGenerationOptions = {},
 ): unknown {
+  const next = {
+    ...options,
+    rootSchema: options.rootSchema ?? schema,
+    depth: (options.depth ?? 0) + 1,
+  };
+  if (next.depth > 24) return undefined;
   if (!isRecord(schema)) {
     return fieldName ? sampleString(fieldName, undefined) : {};
+  }
+  if (
+    typeof schema.$ref === "string" &&
+    (schema.$ref === "#" || schema.$ref.startsWith("#/"))
+  ) {
+    let target: unknown = next.rootSchema;
+    for (const part of schema.$ref.slice(2).split("/").filter(Boolean)) {
+      target =
+        target && typeof target === "object"
+          ? (target as Record<string, unknown>)[
+              part.replace(/~1/g, "/").replace(/~0/g, "~")
+            ]
+          : undefined;
+    }
+    return sampleValueFromSchema(target, fieldName, next);
   }
 
   if (schema.default !== undefined) {
@@ -185,6 +249,11 @@ export function sampleValueFromSchema(
   if (Array.isArray(schema.enum) && schema.enum.length > 0) {
     return schema.enum[0];
   }
+  if (
+    schema.nullable === true ||
+    (Array.isArray(schema.type) && schema.type.includes("null"))
+  )
+    return null;
 
   if (schema.example !== undefined) {
     return schema.example;
@@ -199,13 +268,20 @@ export function sampleValueFromSchema(
     .flat()
     .filter((entry) => entry !== undefined);
   if (compositedSchemas.length > 0) {
-    return sampleValueFromSchema(compositedSchemas[0], fieldName);
+    const nullable = compositedSchemas.find(
+      (item) => isRecord(item) && item.type === "null",
+    );
+    return sampleValueFromSchema(
+      nullable ?? compositedSchemas[0],
+      fieldName,
+      next,
+    );
   }
 
   if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
     const merged: Record<string, unknown> = {};
     for (const part of schema.allOf) {
-      const sample = sampleValueFromSchema(part, fieldName);
+      const sample = sampleValueFromSchema(part, fieldName, next);
       if (isRecord(sample)) {
         Object.assign(merged, sample);
       }
@@ -218,36 +294,51 @@ export function sampleValueFromSchema(
   const schemaType = resolveSchemaType(schema);
   switch (schemaType) {
     case "string":
+      if (typeof schema.pattern === "string") {
+        const literalPrefix = schema.pattern.match(
+          /^\^([A-Za-z0-9_:/.-]+)\$?$/,
+        )?.[1];
+        if (literalPrefix) return literalPrefix;
+      }
+      if (schema.format === "currency") return "usd";
       if (
         typeof schema.format === "string" &&
-        (schema.format.toLowerCase() === "binary" || schema.format.toLowerCase() === "byte")
+        (schema.format.toLowerCase() === "binary" ||
+          schema.format.toLowerCase() === "byte")
       ) {
         return sampleBinaryValue(fieldName, options);
       }
-      return sampleString(fieldName, typeof schema.format === "string" ? schema.format : undefined);
+      return sampleString(
+        fieldName,
+        typeof schema.format === "string" ? schema.format : undefined,
+      );
     case "integer":
     case "number":
       return 1;
     case "boolean":
       return true;
     case "array": {
-      const sampleItem = sampleValueFromSchema(schema.items, fieldName);
+      const sampleItem = sampleValueFromSchema(schema.items, fieldName, next);
       return sampleItem === undefined ? [] : [sampleItem];
     }
     case "object": {
       const properties = isRecord(schema.properties) ? schema.properties : {};
       const requiredFields = Array.isArray(schema.required)
-        ? schema.required.filter((value): value is string => typeof value === "string")
+        ? schema.required.filter(
+            (value): value is string => typeof value === "string",
+          )
         : [];
 
       const result: Record<string, unknown> = {};
-      const keys = options.includeOptionalObjectProperties
-        ? Object.keys(properties)
-        : requiredFields.length > 0
-          ? requiredFields
-          : [];
+      const keys =
+        options.includeOptionalObjectProperties && next.depth < 8
+          ? [...new Set([...requiredFields, ...Object.keys(properties)])]
+          : requiredFields.length > 0
+            ? requiredFields
+            : [];
       for (const key of keys) {
-        result[key] = sampleValueFromSchema(properties[key], key, options);
+        const value = sampleValueFromSchema(properties[key], key, next);
+        if (value !== undefined) result[key] = value;
       }
       return result;
     }
@@ -266,14 +357,10 @@ function buildRequestBodySample(
     return undefined;
   }
 
-  return sampleValueFromSchema(
-    toJsonSchema(tool.requestBody.schema),
-    "body",
-    {
-      ...options,
-      requestBodyContentType: tool.requestBody.contentType,
-    },
-  );
+  return sampleValueFromSchema(toJsonSchema(tool.requestBody.schema), "body", {
+    ...options,
+    requestBodyContentType: tool.requestBody.contentType,
+  });
 }
 
 function buildInvocationArgs(
@@ -284,13 +371,9 @@ function buildInvocationArgs(
   },
 ): Record<string, unknown> {
   if (isWorkflowTool(tool)) {
-    return sampleValueFromSchema(
-      tool.inputSchema,
-      tool.name,
-      {
-        includeOptionalObjectProperties: options.includeOptionalObjectProperties,
-      },
-    ) as Record<string, unknown>;
+    return sampleValueFromSchema(tool.inputSchema, tool.name, {
+      includeOptionalObjectProperties: options.includeOptionalObjectProperties,
+    }) as Record<string, unknown>;
   }
 
   const args: Record<string, unknown> = {};
@@ -313,7 +396,10 @@ function buildInvocationArgs(
     args[parameter.name] = sampleValueFromParameter(parameter);
   }
 
-  if (tool.requestBody && (tool.requestBody.required || options.includeOptionalParameters)) {
+  if (
+    tool.requestBody &&
+    (tool.requestBody.required || options.includeOptionalParameters)
+  ) {
     args.body = buildRequestBodySample(tool, {
       includeOptionalObjectProperties: options.includeOptionalObjectProperties,
     });
@@ -322,14 +408,18 @@ function buildInvocationArgs(
   return args;
 }
 
-export function buildLiveInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+export function buildLiveInvocationArgs(
+  tool: ToolDefinition,
+): Record<string, unknown> {
   return buildInvocationArgs(tool, {
     includeOptionalParameters: false,
     includeOptionalObjectProperties: false,
   });
 }
 
-export function buildCompatibilityInvocationArgs(tool: ToolDefinition): Record<string, unknown> {
+export function buildCompatibilityInvocationArgs(
+  tool: ToolDefinition,
+): Record<string, unknown> {
   return buildInvocationArgs(tool, {
     includeOptionalParameters: true,
     includeOptionalObjectProperties: true,
@@ -361,8 +451,12 @@ function getToolResponseText(result: CallToolResponse): string {
 
   return result.content
     .filter(
-      (entry): entry is Extract<(typeof result.content)[number], { type: "text"; text: string }> =>
-        entry.type === "text" && typeof entry.text === "string",
+      (
+        entry,
+      ): entry is Extract<
+        (typeof result.content)[number],
+        { type: "text"; text: string }
+      > => entry.type === "text" && typeof entry.text === "string",
     )
     .map((entry) => entry.text)
     .join("\n")
@@ -381,7 +475,9 @@ function extractHttpStatusCode(text: string): number | undefined {
   return undefined;
 }
 
-function extractSuccessStatusCode(result: CallToolResponse): number | undefined {
+function extractSuccessStatusCode(
+  result: CallToolResponse,
+): number | undefined {
   const responseText = getToolResponseText(result);
   if (!responseText) {
     return undefined;
@@ -438,15 +534,24 @@ function classifyInvocationResult(
 
   const statusCode = extractHttpStatusCode(responseText);
   if (statusCode === 401 || statusCode === 403) {
-    return buildInvocationResult(tool.name, "skipped", `auth required (${statusCode})`, durationMs);
+    return buildInvocationResult(
+      tool.name,
+      "skipped",
+      `auth required (${statusCode})`,
+      durationMs,
+    );
   }
 
   if (live) {
-    const message = statusCode !== undefined ? `live error (${statusCode})` : condensedText;
+    const message =
+      statusCode !== undefined ? `live error (${statusCode})` : condensedText;
     return buildInvocationResult(tool.name, "fail", message, durationMs);
   }
 
-  const message = statusCode !== undefined ? `structured error (${statusCode})` : condensedText;
+  const message =
+    statusCode !== undefined
+      ? `structured error (${statusCode})`
+      : condensedText;
   return buildInvocationResult(tool.name, "pass", message, durationMs);
 }
 
@@ -459,7 +564,9 @@ function buildInvocationFailureResult(
   const baseMessage = getErrorMessage(error);
   const stderr = truncateText(getServerStderrOutput?.() ?? "", 160);
   const detail =
-    stderr.length > 0 && !baseMessage.includes(stderr) ? `${baseMessage} | stderr: ${stderr}` : baseMessage;
+    stderr.length > 0 && !baseMessage.includes(stderr)
+      ? `${baseMessage} | stderr: ${stderr}`
+      : baseMessage;
 
   return buildInvocationResult(tool.name, "fail", detail, durationMs);
 }
@@ -476,7 +583,9 @@ export async function runRegistrationTests(
   expectedTools: ToolDefinition[],
 ): Promise<ToolTestResult[]> {
   const startedAt = Date.now();
-  const listedTools = await client.listTools(undefined, { timeout: DEFAULT_LIST_TOOLS_TIMEOUT_MS });
+  const listedTools = await client.listTools(undefined, {
+    timeout: DEFAULT_LIST_TOOLS_TIMEOUT_MS,
+  });
   const durationMs = Date.now() - startedAt;
 
   const actualByName = new Map<string, ListedTool>();
@@ -585,7 +694,12 @@ export async function runInvocationTests(
       );
 
       results.push(
-        classifyInvocationResult(tool, response, options.live, Date.now() - startedAt),
+        classifyInvocationResult(
+          tool,
+          response,
+          options.live,
+          Date.now() - startedAt,
+        ),
       );
     } catch (error) {
       results.push(

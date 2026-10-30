@@ -6,8 +6,16 @@ import type { Command } from "commander";
 
 import type { RegistryIndex, RegistryIndexEntry } from "../core.js";
 import { runGitHubLoginFlow } from "./auth.js";
-import { type LoadedMCPForgeConfig, type MCPForgeConfig, loadConfig, writeConfigFile } from "../utils/config.js";
-import { type MCPForgeCredentials, loadCredentials } from "../utils/credentials.js";
+import {
+  type LoadedMCPForgeConfig,
+  type MCPForgeConfig,
+  loadConfig,
+  writeConfigFile,
+} from "../utils/config.js";
+import {
+  type MCPForgeCredentials,
+  loadCredentials,
+} from "../utils/credentials.js";
 import { getAllToolSelectionValues } from "../utils/tool-selection.js";
 import {
   createGitHubBranch,
@@ -70,7 +78,11 @@ function getConfigPath(projectDir: string): string {
   return join(projectDir, "mcpforge.config.json");
 }
 
-function deriveTags(config: LoadedMCPForgeConfig, requestedTags: string[], existingEntry?: RegistryIndexEntry): string[] {
+function deriveTags(
+  config: LoadedMCPForgeConfig,
+  requestedTags: string[],
+  existingEntry?: RegistryIndexEntry,
+): string[] {
   if (requestedTags.length > 0) {
     return requestedTags;
   }
@@ -79,7 +91,9 @@ function deriveTags(config: LoadedMCPForgeConfig, requestedTags: string[], exist
     return existingEntry.tags;
   }
 
-  return [...new Set(config.ir.tools.flatMap((tool) => tool.tags).filter(Boolean))].slice(0, 8);
+  return [
+    ...new Set(config.ir.tools.flatMap((tool) => tool.tags).filter(Boolean)),
+  ].slice(0, 8);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -89,8 +103,15 @@ function getErrorMessage(error: unknown): string {
   return "Unknown error";
 }
 
-function getSuggestedSlug(config: LoadedMCPForgeConfig, requestedSlug?: string): string {
-  const candidate = requestedSlug?.trim() || config.registrySlug || config.apiName || config.ir.apiName;
+function getSuggestedSlug(
+  config: LoadedMCPForgeConfig,
+  requestedSlug?: string,
+): string {
+  const candidate =
+    requestedSlug?.trim() ||
+    config.registrySlug ||
+    config.apiName ||
+    config.ir.apiName;
   return normalizeRegistrySlug(candidate);
 }
 
@@ -127,6 +148,8 @@ function buildRegistryEntryPayload(
           verifiedAt: config.verification.verifiedAt,
           compatibilityVersion: config.verification.compatibilityVersion,
           finalIRHash: config.verification.finalIRHash,
+          runtimeHash: config.verification.runtimeHash,
+          generatorVersion: config.verification.generatorVersion,
           toolCount: config.verification.toolCount,
           passedToolCount: config.verification.passedToolCount,
           skippedToolCount: config.verification.skippedToolCount,
@@ -201,9 +224,13 @@ export function validatePublishConfig(config: LoadedMCPForgeConfig): {
   }
 
   const actualSelections = new Set(getAllToolSelectionValues(config.ir));
-  const unknownSelections = config.selectedTools.filter((value) => !actualSelections.has(value));
+  const unknownSelections = config.selectedTools.filter(
+    (value) => !actualSelections.has(value),
+  );
   if (unknownSelections.length > 0) {
-    errors.push(`Publish aborted because selectedTools contains unknown tools: ${unknownSelections.join(", ")}.`);
+    errors.push(
+      `Publish aborted because selectedTools contains unknown tools: ${unknownSelections.join(", ")}.`,
+    );
   }
 
   if (config.verification) {
@@ -214,16 +241,22 @@ export function validatePublishConfig(config: LoadedMCPForgeConfig): {
       (config.verification.skippedToolCount ?? 0) +
       (config.verification.failedToolCount ?? 0);
     if (reportedCount !== undefined && reportedCount !== expectedCount) {
-      errors.push(`Publish aborted because verification toolCount ${reportedCount} does not match IR tool count ${expectedCount}.`);
+      errors.push(
+        `Publish aborted because verification toolCount ${reportedCount} does not match IR tool count ${expectedCount}.`,
+      );
     }
     if (reportedCount !== undefined && resultCount !== reportedCount) {
-      errors.push(`Publish aborted because verification result counts total ${resultCount}, expected ${reportedCount}.`);
+      errors.push(
+        `Publish aborted because verification result counts total ${resultCount}, expected ${reportedCount}.`,
+      );
     }
   }
 
   if (isLocalhostUrl(config.ir.baseUrl)) {
     warnings.push(`Base URL ${config.ir.baseUrl} points to localhost.`);
-    errors.push("Publish aborted because localhost endpoints cannot be listed in the public registry.");
+    errors.push(
+      "Publish aborted because localhost endpoints cannot be listed in the public registry.",
+    );
   }
 
   return {
@@ -244,7 +277,9 @@ function enforceVerificationPolicy(
     return {
       warnings:
         options.allowUnverified && config.verificationState !== "verified"
-          ? [`Publishing without verification because --allow-unverified was provided (${config.verificationState}).`]
+          ? [
+              `Publishing without verification because --allow-unverified was provided (${config.verificationState}).`,
+            ]
           : [],
       errors: [],
     };
@@ -283,7 +318,8 @@ function resolveCommitBranch(slug: string, now: Date): string {
 async function resolveCredentials(
   dependencies: PublishCommandDependencies,
 ): Promise<MCPForgeCredentials> {
-  const loadStoredCredentials = dependencies.loadStoredCredentials ?? loadCredentials;
+  const loadStoredCredentials =
+    dependencies.loadStoredCredentials ?? loadCredentials;
   const loginFlow = dependencies.loginFlow ?? runGitHubLoginFlow;
 
   const stored = await loadStoredCredentials();
@@ -304,13 +340,16 @@ export async function publishProjectToRegistry(
   const loadProjectConfig = dependencies.loadProjectConfig ?? loadConfig;
   const writeProjectConfig = dependencies.writeProjectConfig ?? writeConfigFile;
   const fetchRepository = dependencies.fetchRepository ?? fetchGitHubRepository;
-  const fetchContentFile = dependencies.fetchContentFile ?? fetchGitHubContentFile;
+  const fetchContentFile =
+    dependencies.fetchContentFile ?? fetchGitHubContentFile;
   const putContentFile = dependencies.putContentFile ?? putGitHubContentFile;
   const fetchBranchSha = dependencies.fetchBranchSha ?? fetchGitHubBranchSha;
   const createBranch = dependencies.createBranch ?? createGitHubBranch;
   const createFork = dependencies.createFork ?? createGitHubFork;
-  const waitForRepository = dependencies.waitForRepository ?? waitForGitHubRepository;
-  const createPullRequest = dependencies.createPullRequest ?? createGitHubPullRequest;
+  const waitForRepository =
+    dependencies.waitForRepository ?? waitForGitHubRepository;
+  const createPullRequest =
+    dependencies.createPullRequest ?? createGitHubPullRequest;
   const onWarning = dependencies.onWarning ?? (() => {});
   const now = dependencies.now ?? (() => new Date());
 
@@ -338,17 +377,29 @@ export async function publishProjectToRegistry(
   const credentials = await resolveCredentials(dependencies);
   const registryRepo = parseRegistryRepo(resolveRegistryRepo());
   const upstreamRepoFullName = `${registryRepo.owner}/${registryRepo.repo}`;
-  const upstreamRepo = await fetchRepository(upstreamRepoFullName, credentials.token);
+  const upstreamRepo = await fetchRepository(
+    upstreamRepoFullName,
+    credentials.token,
+  );
   const baseBranch = upstreamRepo.default_branch;
 
   const slug = getSuggestedSlug(config, options.slug);
   if (!slug) {
-    throw new Error("Could not determine a registry slug. Pass --slug explicitly.");
+    throw new Error(
+      "Could not determine a registry slug. Pass --slug explicitly.",
+    );
   }
 
-  const registryFile = await fetchContentFile(upstreamRepoFullName, "registry.json", credentials.token, baseBranch);
+  const registryFile = await fetchContentFile(
+    upstreamRepoFullName,
+    "registry.json",
+    credentials.token,
+    baseBranch,
+  );
   const registryIndex = readRegistryIndex(registryFile);
-  const existingEntry = registryIndex.entries.find((entry) => entry.slug === slug);
+  const existingEntry = registryIndex.entries.find(
+    (entry) => entry.slug === slug,
+  );
   const version = resolveNextVersion(existingEntry);
   const publishedAt = todayIsoDate(now());
   const payload = buildRegistryEntryPayload(config, {
@@ -362,7 +413,8 @@ export async function publishProjectToRegistry(
   const entryPath = payload.entryFile;
 
   const isOwner =
-    credentials.githubUser.trim().toLowerCase() === upstreamRepo.owner.login.trim().toLowerCase();
+    credentials.githubUser.trim().toLowerCase() ===
+    upstreamRepo.owner.login.trim().toLowerCase();
   const canDirectPush = upstreamRepo.permissions?.push === true;
   const directPush = !options.draft && isOwner && canDirectPush;
 
@@ -379,25 +431,52 @@ export async function publishProjectToRegistry(
         targetRepo = await fetchRepository(forkRepoFullName, credentials.token);
       } catch {
         await createFork(upstreamRepoFullName, credentials.token);
-        targetRepo = await waitForRepository(forkRepoFullName, credentials.token);
+        targetRepo = await waitForRepository(
+          forkRepoFullName,
+          credentials.token,
+        );
       }
       targetRepoFullName = targetRepo.full_name;
       targetBaseBranch = targetRepo.default_branch;
     }
 
-    const branchSha = await fetchBranchSha(targetRepoFullName, targetBaseBranch, credentials.token);
+    const branchSha = await fetchBranchSha(
+      targetRepoFullName,
+      targetBaseBranch,
+      credentials.token,
+    );
     commitBranch = resolveCommitBranch(slug, now());
-    await createBranch(targetRepoFullName, commitBranch, branchSha, credentials.token);
+    await createBranch(
+      targetRepoFullName,
+      commitBranch,
+      branchSha,
+      credentials.token,
+    );
   }
 
   const targetRegistryFile =
     directPush || targetRepoFullName === upstreamRepoFullName
       ? registryFile
-      : await fetchContentFile(targetRepoFullName, "registry.json", credentials.token, targetBaseBranch);
+      : await fetchContentFile(
+          targetRepoFullName,
+          "registry.json",
+          credentials.token,
+          targetBaseBranch,
+        );
   const targetEntryFile =
     directPush || targetRepoFullName === upstreamRepoFullName
-      ? await fetchContentFile(upstreamRepoFullName, entryPath, credentials.token, baseBranch)
-      : await fetchContentFile(targetRepoFullName, entryPath, credentials.token, targetBaseBranch);
+      ? await fetchContentFile(
+          upstreamRepoFullName,
+          entryPath,
+          credentials.token,
+          baseBranch,
+        )
+      : await fetchContentFile(
+          targetRepoFullName,
+          entryPath,
+          credentials.token,
+          targetBaseBranch,
+        );
 
   await putContentFile(
     targetRepoFullName,
@@ -426,7 +505,9 @@ export async function publishProjectToRegistry(
   if (!directPush) {
     prUrl = await createPullRequest(upstreamRepoFullName, credentials.token, {
       title: `Publish ${slug} ${version}`,
-      head: isOwner ? commitBranch : `${credentials.githubUser}:${commitBranch}`,
+      head: isOwner
+        ? commitBranch
+        : `${credentials.githubUser}:${commitBranch}`,
       base: baseBranch,
       body: [
         `Publish \`${slug}\` version \`${version}\` to the MCPForge registry.`,
@@ -463,7 +544,10 @@ export function registerPublishCommand(program: Command): void {
     .option("--tags <a,b,c>", "Comma-separated registry tags")
     .option("--dir <path>", "Generated project directory")
     .option("--draft", "Open a draft pull request instead of pushing directly")
-    .option("--allow-unverified", "Bypass the verification gate and publish anyway")
+    .option(
+      "--allow-unverified",
+      "Bypass the verification gate and publish anyway",
+    )
     .action(async (options: PublishCommandOptions) => {
       intro("mcpforge publish");
 
@@ -482,7 +566,11 @@ export function registerPublishCommand(program: Command): void {
           return;
         }
 
-        outro(result.prUrl ? `Draft PR created: ${result.prUrl}` : "Draft PR created.");
+        outro(
+          result.prUrl
+            ? `Draft PR created: ${result.prUrl}`
+            : "Draft PR created.",
+        );
       } catch (error) {
         const message = getErrorMessage(error);
         log.error(message);
